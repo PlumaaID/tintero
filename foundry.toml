@@ -2,5 +2,22 @@
 src = "src"
 out = "out"
 libs = ["lib"]
+solc = "0.8.24"
+optimizer = true
+optimizer_runs = 10_000
+build_info = true
+extra_output = ["storageLayout"]
+ffi = true
+evm_version = "cancun"
 
-# See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
+[profile.ci]
+fuzz = { runs = 1_000 }
+verbosity = 4
+
+[etherscan]
+arbitrum = { key = "${API_KEY_ARBISCAN}" }
+arbitrum_sepolia = { key = "${API_KEY_ARBISCAN}" }
+
+[rpc_endpoints]
+arbitrum = "https://arb-mainnet.g.alchemy.com/v2/${API_KEY_ALCHEMY}"
+arbitrum_sepolia = "https://arb-sepolia.g.alchemy.com/v2/${API_KEY_ALCHEMY}"
