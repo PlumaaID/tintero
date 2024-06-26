@@ -4,11 +4,11 @@ pragma solidity ^0.8.20;
 
 import {ERC721Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC721/ERC721Upgradeable.sol";
 import {ERC721BurnableUpgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC721/extensions/ERC721BurnableUpgradeable.sol";
-import {Initializable} from "@openzeppelin/contracts/proxy/utils/Initializable.sol";
+import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import {AccessManagedUpgradeable} from "@openzeppelin/contracts-upgradeable/access/manager/AccessManagedUpgradeable.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import {MerkleProof} from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
-import {Bitmaps} from "@openzeppelin/contracts/utils/structs/BitMaps.sol";
+import {BitMaps} from "@openzeppelin/contracts/utils/structs/BitMaps.sol";
 import {Witnesser} from "./Witnesser.sol";
 
 /// @title Endorser
@@ -30,14 +30,14 @@ contract Endorser is
     AccessManagedUpgradeable,
     UUPSUpgradeable
 {
-    using Bitmaps for Bitmaps.Bitmap;
+    using BitMaps for BitMaps.BitMap;
 
     // keccak256(abi.encode(uint256(keccak256("PlumaaID.storage.Endorser")) - 1)) & ~bytes32(uint256(0xff))
     bytes32 constant WITNESSER_STORAGE =
         0xd4afa66895d5fdd6c8f53a8b47d14ebe8786dd18400174140b53bbb9a8838e00;
 
     struct EndorserStorage {
-        Bitmaps.Bitmap _nullifier;
+        BitMaps.BitMap _nullifier;
         Witnesser _witnesser;
     }
 
@@ -52,13 +52,13 @@ contract Endorser is
     /// @notice Initializes the contract setting an initial authority and a Witnesser contract
     function initialize(
         address initialAuthority,
-        address witnesser
+        address _witnesser
     ) public initializer {
         __ERC721_init("Endorser", "END");
         __ERC721Burnable_init();
         __AccessManaged_init(initialAuthority);
         __UUPSUpgradeable_init();
-        _getEndorserStorage()._witnesser = Witnesser(witnesser);
+        _getEndorserStorage()._witnesser = Witnesser(_witnesser);
     }
 
     /// @notice Returns the Witnesser contract
@@ -105,17 +105,20 @@ contract Endorser is
         bytes32[] memory proof
     ) internal {
         bytes32 leaf = _leaf(to, digest);
-        address witnesser = address(witnesser());
         bytes memory data = abi.encodeCall(Witnesser.witnessedAt, (leaf));
-        bytes32 timestamp = _callReturnScratchBytes32(witnesser, 0, data);
+        (, bytes32 timestamp) = _callReturnScratchBytes32(
+            address(witnesser()),
+            0,
+            data
+        );
         if (
             !MerkleProof.verify(proof, root, leaf) || // invalid proof
-            _getEndorserStorage()._nullifier.get(leaf) || // not nullified
+            _getEndorserStorage()._nullifier.get(uint256(leaf)) || // not nullified
             timestamp == 0 // witnessed
         ) {
             revert InvalidProof();
         }
-        _getEndorserStorage()._nullifier.set(leaf);
+        _getEndorserStorage()._nullifier.set(uint256(leaf));
     }
 
     /// @notice Leaf hash. Uses an opinionated double hashing scheme.
@@ -124,10 +127,10 @@ contract Endorser is
     }
 
     /// @notice Get EIP-7201 storage
-    function _getWitnesserStorage()
+    function _getEndorserStorage()
         private
         pure
-        returns (WitnesserStorage storage $)
+        returns (EndorserStorage storage $)
     {
         assembly {
             $.slot := WITNESSER_STORAGE
