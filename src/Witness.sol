@@ -8,20 +8,20 @@ import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/U
 import {Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step.sol";
 import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
-/// @title Witnesser
+/// @title Witness
 ///
 /// @notice A contract to provide data conservation services by witnessing hashes of digital documents.
 /// It can be used to replace a NOM-151 timestamping service.
 ///
 /// @custom:security-contact security@plumaa.id
-contract Witnesser is Initializable, AccessManagedUpgradeable, UUPSUpgradeable {
-    // keccak256(abi.encode(uint256(keccak256("PlumaaID.storage.Witnesser")) - 1)) & ~bytes32(uint256(0xff))
+contract Witness is Initializable, AccessManagedUpgradeable, UUPSUpgradeable {
+    // keccak256(abi.encode(uint256(keccak256("PlumaaID.storage.Witness")) - 1)) & ~bytes32(uint256(0xff))
     bytes32 constant WITNESSER_STORAGE =
-        0x2f67eca4febef59bb0ea363823ce190b8b9971ac293e7fccb4e149c65e726f00;
+        0xe1c08d05d58f7228a3d64b34ae4da271e819b67e55e0ead453ebffdadb959800;
 
     event Witnessed(bytes32 indexed digest, uint48 timestamp);
 
-    struct WitnesserStorage {
+    struct WitnessStorage {
         mapping(bytes32 => uint48 timestamp) _witnessed;
     }
 
@@ -38,21 +38,21 @@ contract Witnesser is Initializable, AccessManagedUpgradeable, UUPSUpgradeable {
 
     /// @notice Returns the timestamp at which a hash was witnessed
     function witnessedAt(bytes32 digest) external view returns (uint48) {
-        return _getWitnesserStorage()._witnessed[digest];
+        return _getWitnessStorage()._witnessed[digest];
     }
 
-    /// @notice Witnesses a hash and sets a timestamp for data conservation
+    /// @notice Witness a hash and sets a timestamp for data conservation
     function witness(bytes32 digest) external restricted {
         uint48 timestamp = SafeCast.toUint48(block.timestamp);
-        _getWitnesserStorage()._witnessed[digest] = timestamp;
+        _getWitnessStorage()._witnessed[digest] = timestamp;
         emit Witnessed(digest, timestamp);
     }
 
     /// @notice Get EIP-7201 storage
-    function _getWitnesserStorage()
+    function _getWitnessStorage()
         private
         pure
-        returns (WitnesserStorage storage $)
+        returns (WitnessStorage storage $)
     {
         assembly {
             $.slot := WITNESSER_STORAGE

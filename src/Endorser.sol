@@ -9,13 +9,13 @@ import {AccessManagedUpgradeable} from "@openzeppelin/contracts-upgradeable/acce
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import {MerkleProof} from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
 import {BitMaps} from "@openzeppelin/contracts/utils/structs/BitMaps.sol";
-import {Witnesser} from "./Witnesser.sol";
+import {Witness} from "./Witness.sol";
 
 /// @title Endorser
 ///
 /// @notice A contract to track digital endorsements according to Mexican comercial and debt instruments law. This contract
 /// allows for any user to mint a new token by providing the hash of the digital document that's endorsed and a proof witnessed
-/// by the Witnesser. Privacy is ensured by only tracking the hash of the document, and not the document itself.
+/// by the Witness. Privacy is ensured by only tracking the hash of the document, and not the document itself.
 ///
 /// Approvals are not enabled since there's not regulatory clarity on the matter. Contract may upgrade to enable approvals.
 ///
@@ -33,12 +33,12 @@ contract Endorser is
     using BitMaps for BitMaps.BitMap;
 
     // keccak256(abi.encode(uint256(keccak256("PlumaaID.storage.Endorser")) - 1)) & ~bytes32(uint256(0xff))
-    bytes32 constant WITNESSER_STORAGE =
+    bytes32 constant ENDORSER_STORAGE =
         0xd4afa66895d5fdd6c8f53a8b47d14ebe8786dd18400174140b53bbb9a8838e00;
 
     struct EndorserStorage {
         BitMaps.BitMap _nullifier;
-        Witnesser _witnesser;
+        Witness _witness;
     }
 
     error UnsupportedOperation();
@@ -49,21 +49,21 @@ contract Endorser is
         _disableInitializers();
     }
 
-    /// @notice Initializes the contract setting an initial authority and a Witnesser contract
+    /// @notice Initializes the contract setting an initial authority and a Witness contract
     function initialize(
         address initialAuthority,
-        address _witnesser
+        address _witness
     ) public initializer {
         __ERC721_init("Endorser", "END");
         __ERC721Burnable_init();
         __AccessManaged_init(initialAuthority);
         __UUPSUpgradeable_init();
-        _getEndorserStorage()._witnesser = Witnesser(_witnesser);
+        _getEndorserStorage()._witness = Witness(_witness);
     }
 
-    /// @notice Returns the Witnesser contract
-    function witnesser() public view returns (Witnesser) {
-        return _getEndorserStorage()._witnesser;
+    /// @notice Returns the Witness contract
+    function witness() public view returns (Witness) {
+        return _getEndorserStorage()._witness;
     }
 
     /// @notice Mints a new token for the provided `to` address if the proof is valid and nullifies it so it can't be used again.
@@ -96,7 +96,7 @@ contract Endorser is
     /// Requirements:
     ///
     /// - The leaf produced by the `digest` and `to` must derive to the `root` using the `proof`.
-    /// - The `root` was witnessed by the Witnesser.
+    /// - The `root` was witnessed by the Witness.
     /// - The `leaf` was not nullified before.
     function _validateAndNullifyProof(
         address to,
@@ -104,13 +104,9 @@ contract Endorser is
         bytes32 root,
         bytes32[] memory proof
     ) internal {
+        bytes memory data = abi.encodeCall(Witness.witnessedAt, (root));
         bytes32 leaf = _leaf(to, digest);
-        bytes memory data = abi.encodeCall(Witnesser.witnessedAt, (leaf));
-        (, bytes32 timestamp) = _callReturnScratchBytes32(
-            address(witnesser()),
-            0,
-            data
-        );
+        (, bytes32 timestamp) = _callReturnBytes32(address(witness()), data);
         if (
             !MerkleProof.verify(proof, root, leaf) || // invalid proof
             _getEndorserStorage()._nullifier.get(uint256(leaf)) || // not nullified
@@ -133,7 +129,7 @@ contract Endorser is
         returns (EndorserStorage storage $)
     {
         assembly {
-            $.slot := WITNESSER_STORAGE
+            $.slot := ENDORSER_STORAGE
         }
     }
 
@@ -146,16 +142,15 @@ contract Endorser is
     ///
     /// WARNING: Do not assume that the result is zero if `success` is false. Memory can be already allocated
     /// and this function doesn't zero it out.
-    function _callReturnScratchBytes32(
+    function _callReturnBytes32(
         address target,
-        uint256 value,
         bytes memory data
     ) internal returns (bool success, bytes32 result) {
         assembly ("memory-safe") {
             success := call(
                 gas(),
                 target,
-                value,
+                0,
                 add(data, 0x20),
                 mload(data),
                 0,

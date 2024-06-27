@@ -7,28 +7,28 @@ DEFAULT_ANVIL_KEY := 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf
 all: install clean build
 
 # Clean the repo
-clean  :; forge clean
+clean:; forge clean
 
 # Remove modules
-install :; forge install
+install:; forge install
 
 # Update Dependencies
 update:; forge update
 
 build:; forge build
 
-test :; forge test 
+test: clean; forge test 
 
-snapshot :; forge snapshot
+snapshot: clean; forge snapshot
 
-format :; forge fmt
+format:; forge fmt
 
-anvil :; anvil -m 'test test test test test test test test test test test junk' --steps-tracing --block-time 1
+anvil:; anvil -m 'test test test test test test test test test test test junk' --steps-tracing --block-time 1
 
-slither :; slither . --config-file slither.config.json --checklist 
+slither:; slither . --config-file slither.config.json --checklist 
 
-aderyn :; aderyn .
+aderyn:; aderyn .
 
-scopefile :; @tree ./src/ | sed 's/└/#/g' | awk -F '── ' '!/\.sol$$/ { path[int((length($$0) - length($$2))/2)] = $$2; next } { p = "src"; for(i=2; i<=int((length($$0) - length($$2))/2); i++) if (path[i] != "") p = p "/" path[i]; print p "/" $$2; }' > scope.txt
+scopefile:; @tree ./src/ | sed 's/└/#/g' | awk -F '── ' '!/\.sol$$/ { path[int((length($$0) - length($$2))/2)] = $$2; next } { p = "src"; for(i=2; i<=int((length($$0) - length($$2))/2); i++) if (path[i] != "") p = p "/" path[i]; print p "/" $$2; }' > scope.txt
 
-scope :; tree ./src/ | sed 's/└/#/g; s/──/--/g; s/├/#/g; s/│ /|/g; s/│/|/g'
+scope:; tree ./src/ | sed 's/└/#/g; s/──/--/g; s/├/#/g; s/│ /|/g; s/│/|/g'
