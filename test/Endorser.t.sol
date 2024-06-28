@@ -4,6 +4,9 @@ pragma solidity ^0.8.20;
 import {BaseTest} from "./Base.t.sol";
 import {Merkle} from "murky/Merkle.sol";
 import {Witness} from "~/Witness.sol";
+import {ICreateX} from "createx/ICreateX.sol";
+import {AccessManager} from "@openzeppelin/contracts/access/manager/AccessManager.sol";
+import {console2} from "forge-std/console2.sol";
 
 contract EndorserTest is BaseTest {
     function testInitialized() public {
