@@ -13,7 +13,7 @@ import {Endorser} from "~/Endorser.sol";
 /// @dev See the Solidity Scripting tutorial: https://book.getfoundry.sh/tutorials/solidity-scripting
 contract Deploy is BaseScript {
     address constant PLUMAA_DEPLOYER_EOA =
-        0x171cE5a35e417F90B2D73858e0dedA632146A603;
+        0x00560ED8242bF346c162c668487BaCD86cc0B8aa;
     address constant PLUMAA_MULTISIG =
         0x00fA8957dC3D2f6081360056bf2f6d4b5f1a49aa;
     address constant CREATE_X = 0xba5Ed099633D3B313e4D5F7bdc1305d3c28ba5Ed;
@@ -30,35 +30,37 @@ contract Deploy is BaseScript {
     }
 
     function _deployManager() internal returns (address) {
+        bytes memory code = abi.encodePacked(
+            type(AccessManager).creationCode,
+            abi.encode(PLUMAA_MULTISIG)
+        );
         address manager = createX.deployCreate2(
-            _toSalt(0x6b43bfc879a9fa03533daf),
-            abi.encodePacked(
-                type(AccessManager).creationCode,
-                abi.encode(PLUMAA_MULTISIG)
-            )
+            _toSalt(0xe1ea5c2e4c0ffd03f833b9),
+            code
         );
         console2.log("AccessManager contract deployed to %s", address(manager));
-        assert(0x00Ea868de72CCaaF5fA05CAA80812dFcF9A531aA == manager);
+        assert(0x000fcD69be90B1ABCAfC40D47Ba3f4eE628725Aa == manager);
         return manager;
     }
 
     function _deployWitness(address manager) internal returns (address) {
         address witnessImplementation = createX.deployCreate2(
-            _toSalt(0xc667d3139828fd030a37e0),
+            _toSalt(0x6f8bc95241def903fa0443),
             type(Witness).creationCode
         );
-        address witnessProxy = createX.deployCreate2(
-            _toSalt(0x73c40bb27a35f5034e2e41),
-            abi.encodePacked(
-                type(ERC1967Proxy).creationCode,
-                abi.encode(
-                    witnessImplementation,
-                    abi.encodeCall(Witness.initialize, (manager))
-                )
+        bytes memory code = abi.encodePacked(
+            type(ERC1967Proxy).creationCode,
+            abi.encode(
+                witnessImplementation,
+                abi.encodeCall(Witness.initialize, (manager))
             )
         );
+        address witnessProxy = createX.deployCreate2(
+            _toSalt(0x2c6828624659e7039fb979),
+            code
+        );
         console2.log("Witness contract deployed to %s", address(witnessProxy));
-        assert(0x0022D40927C0E9561ac4D1Cf919115BBC3AadaAa == witnessProxy);
+        assert(0x00EcA6DC15966C282CF3aD953E559BC2d098D6aA == witnessProxy);
         return witnessProxy;
     }
 
@@ -67,24 +69,25 @@ contract Deploy is BaseScript {
         address witness
     ) internal returns (address) {
         address endorserImplementation = createX.deployCreate2(
-            _toSalt(0x9fe08fa42678fd03141080),
+            _toSalt(0xdd461e9125fceb0358adb7),
             type(Endorser).creationCode
         );
-        address endorserProxy = createX.deployCreate2(
-            _toSalt(0xd0cf5ad7789bf503cee991),
-            abi.encodePacked(
-                type(ERC1967Proxy).creationCode,
-                abi.encode(
-                    endorserImplementation,
-                    abi.encodeCall(Endorser.initialize, (manager, witness))
-                )
+        bytes memory code = abi.encodePacked(
+            type(ERC1967Proxy).creationCode,
+            abi.encode(
+                endorserImplementation,
+                abi.encodeCall(Endorser.initialize, (manager, witness))
             )
+        );
+        address endorserProxy = createX.deployCreate2(
+            _toSalt(0xe7c84f9cd4d6eb037d8152),
+            code
         );
         console2.log(
             "Endorser contract deployed to %s",
             address(endorserProxy)
         );
-        assert(0x004F084FD7180Cf971dC7A406073716880335aAa == endorserProxy);
+        assert(0x00956D2036740590C6752dC7CA3960A11aBeD1aa == endorserProxy);
         return endorserProxy;
     }
 
