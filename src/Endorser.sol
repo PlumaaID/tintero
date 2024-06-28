@@ -22,6 +22,8 @@ import {Witness} from "./Witness.sol";
 /// NOTE: Property is tied to regular Ethereum addresses. It's the responsibility of the developer to implement a robust
 /// legal framework to ensure the link between the owner and such address.
 ///
+/// @author Ernesto García
+///
 /// @custom:security-contact security@plumaa.id
 contract Endorser is
     Initializable,

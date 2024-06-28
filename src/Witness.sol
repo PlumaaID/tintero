@@ -13,6 +13,8 @@ import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 /// @notice A contract to provide data conservation services by witnessing hashes of digital documents.
 /// It can be used to replace a NOM-151 timestamping service.
 ///
+/// @author Ernesto García
+///
 /// @custom:security-contact security@plumaa.id
 contract Witness is Initializable, AccessManagedUpgradeable, UUPSUpgradeable {
     // keccak256(abi.encode(uint256(keccak256("PlumaaID.storage.Witness")) - 1)) & ~bytes32(uint256(0xff))
