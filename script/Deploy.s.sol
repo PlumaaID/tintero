@@ -56,11 +56,11 @@ contract Deploy is BaseScript {
             )
         );
         address witnessProxy = createX.deployCreate2(
-            _toSalt(0x2c6828624659e7039fb979),
+            _toSalt(0xe85df6f322c1c203ef7473),
             code
         );
         console2.log("Witness contract deployed to %s", address(witnessProxy));
-        assert(0x00EcA6DC15966C282CF3aD953E559BC2d098D6aA == witnessProxy);
+        assert(0x008CFe0543dB8d5000219433dca6E59D482177Aa == witnessProxy);
         return witnessProxy;
     }
 
@@ -80,14 +80,14 @@ contract Deploy is BaseScript {
             )
         );
         address endorserProxy = createX.deployCreate2(
-            _toSalt(0xe7c84f9cd4d6eb037d8152),
+            _toSalt(0xa0b325c665eefd038d7916),
             code
         );
         console2.log(
             "Endorser contract deployed to %s",
             address(endorserProxy)
         );
-        assert(0x00956D2036740590C6752dC7CA3960A11aBeD1aa == endorserProxy);
+        assert(0x0065313718d91863De3cB78A5C188990A67093Aa == endorserProxy);
         return endorserProxy;
     }
 
