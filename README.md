@@ -16,3 +16,10 @@ The content of documents remains private since the system only track hashes.
 ```
 make
 ```
+
+### Deployments
+
+| Network          | ChainID | Access Manager                             | Witness Proxy                              | Endorser Proxy                             |
+| ---------------- | ------- | ------------------------------------------ | ------------------------------------------ | ------------------------------------------ |
+| Arbitrum         | 42161   | 0x000fcD69be90B1ABCAfC40D47Ba3f4eE628725Aa | 0x008CFe0543dB8d5000219433dca6E59D482177Aa | 0x0065313718d91863De3cB78A5C188990A67093Aa |
+| Arbitrum Sepolia | 421614  | 0x000fcD69be90B1ABCAfC40D47Ba3f4eE628725Aa | 0x008CFe0543dB8d5000219433dca6E59D482177Aa | 0x0065313718d91863De3cB78A5C188990A67093Aa |
