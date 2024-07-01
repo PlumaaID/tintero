@@ -31,10 +31,11 @@ make
 
 ### Role mapping
 
-| Role     | Function signature                | Selector |
-| -------- | --------------------------------- | -------- |
-| RELAYER  | `witness(bytes32)`                | 114ee197 |
-| UPGRADER | `upgradeToAndCall(address,bytes)` | 4f1ef286 |
+| Role     | Function signature                | Selector | Target contract                            |
+| -------- | --------------------------------- | -------- | ------------------------------------------ |
+| RELAYER  | `witness(bytes32)`                | 114ee197 | 0x008CFe0543dB8d5000219433dca6E59D482177Aa |
+| UPGRADER | `upgradeToAndCall(address,bytes)` | 4f1ef286 | 0x008CFe0543dB8d5000219433dca6E59D482177Aa |
+| UPGRADER | `upgradeToAndCall(address,bytes)` | 4f1ef286 | 0x0065313718d91863De3cB78A5C188990A67093Aa |
 
 ### Role members
 
