@@ -29,7 +29,14 @@ make
 - RELAYER: 12344232774587232509 (`uint64(bytes8(keccak256('RELAYER')))`)
 - UPGRADER: 11967657057449934008 (`uint64(bytes8(keccak256('UPGRADER')))`)
 
-### Intended role mapping
+### Role mapping
+
+| Role     | Function signature                | Selector |
+| -------- | --------------------------------- | -------- |
+| RELAYER  | `witness(bytes32)`                | 114ee197 |
+| UPGRADER | `upgradeToAndCall(address,bytes)` | 4f1ef286 |
+
+### Role members
 
 | Role     | Address                                    | Execution Delay |
 | -------- | ------------------------------------------ | --------------- |
