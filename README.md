@@ -23,3 +23,15 @@ make
 | ---------------- | ------- | ------------------------------------------ | ------------------------------------------ | ------------------------------------------ |
 | Arbitrum         | 42161   | 0x000fcD69be90B1ABCAfC40D47Ba3f4eE628725Aa | 0x008CFe0543dB8d5000219433dca6E59D482177Aa | 0x0065313718d91863De3cB78A5C188990A67093Aa |
 | Arbitrum Sepolia | 421614  | 0x000fcD69be90B1ABCAfC40D47Ba3f4eE628725Aa | 0x008CFe0543dB8d5000219433dca6E59D482177Aa | 0x0065313718d91863De3cB78A5C188990A67093Aa |
+
+## Roles
+
+- RELAYER: 12344232774587232509 (`uint64(bytes8(keccak256('RELAYER')))`)
+- UPGRADER: 11967657057449934008 (`uint64(bytes8(keccak256('UPGRADER')))`)
+
+### Intended role mapping
+
+| Role     | Address                                    | Execution Delay |
+| -------- | ------------------------------------------ | --------------- |
+| RELAYER  | 0xD4FAa2Bcdd1A438C9E69699166eDc92E65954ED7 | 0               |
+| UPGRADER | 0x00fA8957dC3D2f6081360056bf2f6d4b5f1a49aa | 259200 (3 days) |
