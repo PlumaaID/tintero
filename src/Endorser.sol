@@ -5,22 +5,26 @@ pragma solidity ^0.8.20;
 import {ERC721Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC721/ERC721Upgradeable.sol";
 import {ERC721BurnableUpgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC721/extensions/ERC721BurnableUpgradeable.sol";
 import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import {IAccessManager} from "@openzeppelin/contracts/access/manager/IAccessManager.sol";
 import {AccessManagedUpgradeable} from "@openzeppelin/contracts-upgradeable/access/manager/AccessManagedUpgradeable.sol";
+import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
-import {MerkleProof} from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
+import {SignatureChecker} from "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
 import {BitMaps} from "@openzeppelin/contracts/utils/structs/BitMaps.sol";
-import {Witness} from "./Witness.sol";
+import {IWitness, Proof} from "@WitnessCo/interfaces/IWitness.sol";
+import {WitnessConsumer} from "@WitnessCo/WitnessConsumer.sol";
 
 /// @title Endorser
 ///
 /// @notice A contract to track digital endorsements according to Mexican comercial and debt instruments law. This contract
-/// allows for any user to mint a new token by providing the hash of the digital document that's endorsed and a proof witnessed
-/// by the Witness. Privacy is ensured by only tracking the hash of the document, and not the document itself.
+/// allows for any user to mint a new token by providing the hash of the digital document a provenance proof checked against
+/// the [Witness](https://docs.witness.co/api-reference/solidity/Witness.sol). Privacy is ensured by only tracking the hash of the document,
+/// and not the document itself.
 ///
-/// Approvals are not enabled since there's not regulatory clarity on the matter. Contract may upgrade to enable approvals.
+/// Approvals are not enabled since there's no regulatory clarity on the matter. Contract may upgrade to enable approvals.
 ///
 /// NOTE: Property is tied to regular Ethereum addresses. It's the responsibility of the developer to implement a robust
-/// legal framework to ensure the link between the owner and such address.
+/// regulatory framework to ensure the link between the owner and such address.
 ///
 /// @author Ernesto García
 ///
@@ -30,41 +34,54 @@ contract Endorser is
     ERC721Upgradeable,
     ERC721BurnableUpgradeable,
     AccessManagedUpgradeable,
-    UUPSUpgradeable
+    UUPSUpgradeable,
+    WitnessConsumer
 {
     using BitMaps for BitMaps.BitMap;
 
     // keccak256(abi.encode(uint256(keccak256("PlumaaID.storage.Endorser")) - 1)) & ~bytes32(uint256(0xff))
-    bytes32 constant ENDORSER_STORAGE =
+    bytes32 private constant ENDORSER_STORAGE =
         0xd4afa66895d5fdd6c8f53a8b47d14ebe8786dd18400174140b53bbb9a8838e00;
+
+    uint64 internal constant PROVENANCE_AUTHORIZER_ROLE =
+        uint64(bytes8(keccak256("PlumaaID.PROVENANCE_AUTHORIZER")));
 
     struct EndorserStorage {
         BitMaps.BitMap _nullifier;
-        Witness _witness;
+        IWitness _witness;
     }
 
     error UnsupportedOperation();
-    error InvalidProof();
+    error AlreadyClaimed();
+    error MismatchedLeaf();
+    error InvalidAuthorization();
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
     }
 
+    /// @notice Leaf hash. Uses SHA256 according to the algorithms approved by the Mexican government.
+    function getProvenanceHash(
+        bytes memory data
+    ) public pure virtual override returns (bytes32) {
+        return sha256(data);
+    }
+
     /// @notice Initializes the contract setting an initial authority and a Witness contract
     function initialize(
         address initialAuthority,
-        address _witness
+        IWitness witness
     ) public initializer {
         __ERC721_init("Endorser", "END");
         __ERC721Burnable_init();
         __AccessManaged_init(initialAuthority);
         __UUPSUpgradeable_init();
-        _getEndorserStorage()._witness = Witness(_witness);
+        _getEndorserStorage()._witness = witness;
     }
 
-    /// @notice Returns the Witness contract
-    function witness() public view returns (Witness) {
+    /// @inheritdoc WitnessConsumer
+    function WITNESS() public view virtual override returns (IWitness) {
         return _getEndorserStorage()._witness;
     }
 
@@ -72,10 +89,17 @@ contract Endorser is
     function mint(
         address to,
         bytes32 digest,
-        bytes32 root,
-        bytes32[] memory proof
+        Proof calldata proof,
+        address authorizer,
+        bytes calldata authorizerSignature
     ) external {
-        _validateAndNullifyProof(to, digest, root, proof);
+        _validateAndNullifyProof(
+            to,
+            digest,
+            proof,
+            authorizer,
+            authorizerSignature
+        );
         _safeMint(to, uint256(digest));
     }
 
@@ -103,25 +127,40 @@ contract Endorser is
     function _validateAndNullifyProof(
         address to,
         bytes32 digest,
-        bytes32 root,
-        bytes32[] memory proof
+        Proof calldata proof,
+        address authorizer,
+        bytes calldata authorizerSignature
     ) internal {
-        bytes memory data = abi.encodeCall(Witness.witnessedAt, (root));
-        bytes32 leaf = _leaf(to, digest);
-        (, bytes32 timestamp) = _callReturnBytes32(address(witness()), data);
-        if (
-            !MerkleProof.verify(proof, root, leaf) || // invalid proof
-            _getEndorserStorage()._nullifier.get(uint256(leaf)) || // not nullified
-            timestamp == 0 // witnessed
-        ) {
-            revert InvalidProof();
-        }
-        _getEndorserStorage()._nullifier.set(uint256(leaf));
-    }
+        EndorserStorage storage $ = _getEndorserStorage();
+        bytes32 leaf = getProvenanceHash(abi.encode(to, digest));
 
-    /// @notice Leaf hash. Uses an opinionated double hashing scheme.
-    function _leaf(address to, bytes32 digest) internal pure returns (bytes32) {
-        return keccak256(bytes.concat(keccak256(abi.encode(to, digest))));
+        // Sanity check
+        if (leaf != proof.leaf) revert MismatchedLeaf();
+
+        // Already nullified
+        if ($._nullifier.get(uint256(leaf))) revert AlreadyClaimed();
+
+        // Verify authorizer signature
+        if (
+            !SignatureChecker.isValidSignatureNow(
+                authorizer,
+                MessageHashUtils.toEthSignedMessageHash(leaf),
+                authorizerSignature
+            )
+        ) revert InvalidAuthorization();
+
+        // Check if the authorizer is a member of the PROVENANCE_AUTHORIZER_ROLE
+        (bool isMember, ) = IAccessManager(authority()).hasRole(
+            PROVENANCE_AUTHORIZER_ROLE,
+            authorizer
+        );
+        if (!isMember) revert InvalidAuthorization();
+
+        // Nullify leaf
+        $._nullifier.set(uint256(leaf));
+
+        // Reverts on invalid proof
+        this.verifyProof(proof);
     }
 
     /// @notice Get EIP-7201 storage
@@ -130,7 +169,7 @@ contract Endorser is
         pure
         returns (EndorserStorage storage $)
     {
-        assembly {
+        assembly ("memory-safe") {
             $.slot := ENDORSER_STORAGE
         }
     }

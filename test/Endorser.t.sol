@@ -2,16 +2,17 @@
 pragma solidity ^0.8.20;
 
 import {BaseTest} from "./Base.t.sol";
-import {Merkle} from "murky/Merkle.sol";
-import {Witness} from "~/Witness.sol";
 import {ICreateX} from "createx/ICreateX.sol";
 import {AccessManager} from "@openzeppelin/contracts/access/manager/AccessManager.sol";
+import {IWitness, Proof} from "@WitnessCo/interfaces/IWitness.sol";
+import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
+
 import {console2} from "forge-std/console2.sol";
 
 contract EndorserTest is BaseTest {
     function testInitialized() public {
         vm.expectRevert();
-        endorser.initialize(address(accessManager), address(witness));
+        endorser.initialize(address(accessManager), WITNESS);
     }
 
     function testAccessManager() public view {
@@ -19,61 +20,74 @@ contract EndorserTest is BaseTest {
     }
 
     function testWitness() public view {
-        assertEq(address(endorser.witness()), address(witness));
+        assertEq(address(endorser.WITNESS()), address(WITNESS));
     }
 
     function testMint(address minter, address receiver, bytes32 digest) public {
         vm.assume(receiver.code.length == 0 && receiver != address(0));
 
-        // Setup roles
-        bytes4[] memory selectors = new bytes4[](1);
-        selectors[0] = Witness.witness.selector;
-        accessManager.setTargetFunctionRole(
-            address(witness),
-            selectors,
-            relayerRole
+        // The leaf is the receiver and the digest concatenated
+        bytes32 leaf = sha256(abi.encode(receiver, digest));
+
+        // Create an authorization signature
+        (address authorizer, uint256 authorizerPk) = makeAddrAndKey(
+            "authorizer"
         );
-        // So we can witness the merkle root
-        accessManager.grantRole(relayerRole, address(this), 0);
-
-        // The leaf is the receiver and the digest
-        bytes32 leaf = keccak256(
-            bytes.concat(keccak256(abi.encode(receiver, digest)))
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(
+            authorizerPk,
+            MessageHashUtils.toEthSignedMessageHash(leaf)
         );
+        bytes memory authorizationSignature = abi.encodePacked(r, s, v);
+        accessManager.grantRole(PROVENANCE_AUTHORIZER_ROLE, authorizer, 0);
 
-        // Initialize
-        Merkle m = new Merkle();
-        // Toy Data
-        bytes32[] memory data = new bytes32[](4);
-        data[0] = bytes32("0x00");
-        data[1] = bytes32("0x01");
-        data[2] = bytes32("0x02");
-        // The leaf
-        data[3] = leaf;
-
-        bytes32 root = m.getRoot(data);
-        bytes32[] memory proof = m.getProof(data, 3); // Proof for our leaf
-
-        // Witness root
-        witness.witness(root);
+        vm.warp(block.timestamp + 1); // Make the role to go in effect
 
         // Mint
         vm.prank(minter);
-        endorser.mint(receiver, digest, root, proof);
+        endorser.setMockVal(true);
+        endorser.mint(
+            receiver,
+            digest,
+            Proof({
+                index: uint256(0),
+                leaf: leaf,
+                leftRange: new bytes32[](0),
+                rightRange: new bytes32[](0),
+                targetRoot: bytes32(0)
+            }),
+            authorizer,
+            authorizationSignature
+        );
         assertEq(endorser.ownerOf(uint256(digest)), receiver);
         assertNotEq(block.timestamp, 0);
+
+        // Can't mint the same digest again
+        vm.prank(minter);
+        vm.expectRevert();
+        endorser.mint(
+            receiver,
+            digest,
+            Proof({
+                index: uint256(0),
+                leaf: leaf,
+                leftRange: new bytes32[](0),
+                rightRange: new bytes32[](0),
+                targetRoot: bytes32(0)
+            }),
+            authorizer,
+            authorizationSignature
+        );
     }
 
     function testFailMint(
         address minter,
         address receiver,
         bytes32 digest,
-        bytes32 root,
-        bytes32[] memory proof
+        Proof calldata proof
     ) public {
         vm.prank(minter);
         vm.expectRevert(bytes4(keccak256("InvalidProof")));
-        endorser.mint(receiver, digest, root, proof);
+        endorser.mint(receiver, digest, proof, address(0), "");
     }
 
     function testFailApproval(address to, uint256 tokenId) public {
