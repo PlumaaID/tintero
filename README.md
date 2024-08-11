@@ -20,18 +20,19 @@ make
 
 | Network          | ChainID | Access Manager                             | Endorser Proxy                             |
 | ---------------- | ------- | ------------------------------------------ | ------------------------------------------ |
-| Arbitrum         | 42161   | 0x00BA769e700657aDC3bB4Fb62315034bf65105aA | 0x009079A0E192A3cAebbfC96db1D22e6Aa4458CaA |
-| Arbitrum Sepolia | 421614  | 0x00BA769e700657aDC3bB4Fb62315034bf65105aA | 0x009079A0E192A3cAebbfC96db1D22e6Aa4458CaA |
+| Arbitrum         | 42161   | 0x00AaE6c51303407F8ae2d8a0323c9e4CA63eeCAa | 0x003104BA7C02A86FA9337059F8df34614c8d46aa |
+| Arbitrum Sepolia | 421614  | 0x00AaE6c51303407F8ae2d8a0323c9e4CA63eeCAa | 0x003104BA7C02A86FA9337059F8df34614c8d46aa |
 
 ## Roles
 
+- UPGRADER: 4853719658622747636 (`uint64(bytes8(keccak256("PlumaaID.UPGRADER")))`)
 - PROVENANCE_AUTHORIZER: 12236269664351332516 (`uint64(bytes8(keccak256("PlumaaID.PROVENANCE_AUTHORIZER")))`)
 
 ### Role mapping
 
 | Role     | Function signature                | Selector | Target contract                            |
 | -------- | --------------------------------- | -------- | ------------------------------------------ |
-| UPGRADER | `upgradeToAndCall(address,bytes)` | 4f1ef286 | 0x009079A0E192A3cAebbfC96db1D22e6Aa4458CaA |
+| UPGRADER | `upgradeToAndCall(address,bytes)` | 4f1ef286 | 0x003104BA7C02A86FA9337059F8df34614c8d46aa |
 
 ### Role members
 

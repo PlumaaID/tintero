@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 
 import {ERC721Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC721/ERC721Upgradeable.sol";
 import {ERC721BurnableUpgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC721/extensions/ERC721BurnableUpgradeable.sol";
+import {EIP712Upgradeable} from "@openzeppelin/contracts-upgradeable/utils/cryptography/EIP712Upgradeable.sol";
 import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import {IAccessManager} from "@openzeppelin/contracts/access/manager/IAccessManager.sol";
 import {AccessManagedUpgradeable} from "@openzeppelin/contracts-upgradeable/access/manager/AccessManagedUpgradeable.sol";
@@ -18,8 +19,8 @@ import {WitnessConsumer} from "@WitnessCo/WitnessConsumer.sol";
 ///
 /// @notice A contract to track digital endorsements according to Mexican comercial and debt instruments law. This contract
 /// allows for any user to mint a new token by providing the hash of the digital document a provenance proof checked against
-/// the [Witness](https://docs.witness.co/api-reference/solidity/Witness.sol). Privacy is ensured by only tracking the hash of the document,
-/// and not the document itself.
+/// the [Witness](https://docs.witness.co/api-reference/solidity/Witness.sol) and a valid signature from an authorizer.
+/// Privacy is ensured by only tracking the hash of the document, and not the document itself.
 ///
 /// Approvals are not enabled since there's no regulatory clarity on the matter. Contract may upgrade to enable approvals.
 ///
@@ -33,6 +34,7 @@ contract Endorser is
     Initializable,
     ERC721Upgradeable,
     ERC721BurnableUpgradeable,
+    EIP712Upgradeable,
     AccessManagedUpgradeable,
     UUPSUpgradeable,
     WitnessConsumer
@@ -46,6 +48,15 @@ contract Endorser is
     uint64 internal constant PROVENANCE_AUTHORIZER_ROLE =
         uint64(bytes8(keccak256("PlumaaID.PROVENANCE_AUTHORIZER")));
 
+    struct MintRequestData {
+        address authorizer;
+        address to;
+        bytes signature;
+    }
+
+    bytes32 internal constant _MINT_AUTHORIZATION_TYPEHASH =
+        keccak256("MintRequest(bytes32 leaf,address to)");
+
     struct EndorserStorage {
         BitMaps.BitMap _nullifier;
         IWitness _witness;
@@ -53,7 +64,6 @@ contract Endorser is
 
     error UnsupportedOperation();
     error AlreadyClaimed();
-    error MismatchedLeaf();
     error InvalidAuthorization();
 
     /// @custom:oz-upgrades-unsafe-allow constructor
@@ -75,6 +85,7 @@ contract Endorser is
     ) public initializer {
         __ERC721_init("Endorser", "END");
         __ERC721Burnable_init();
+        __EIP712_init("Endorser", "1");
         __AccessManaged_init(initialAuthority);
         __UUPSUpgradeable_init();
         _getEndorserStorage()._witness = witness;
@@ -87,20 +98,11 @@ contract Endorser is
 
     /// @notice Mints a new token for the provided `to` address if the proof is valid and nullifies it so it can't be used again.
     function mint(
-        address to,
-        bytes32 digest,
-        Proof calldata proof,
-        address authorizer,
-        bytes calldata authorizerSignature
+        MintRequestData calldata request,
+        Proof calldata proof
     ) external {
-        _validateAndNullifyProof(
-            to,
-            digest,
-            proof,
-            authorizer,
-            authorizerSignature
-        );
-        _safeMint(to, uint256(digest));
+        _validateAndNullifyProof(request, proof);
+        _safeMint(request.to, uint256(proof.leaf));
     }
 
     function _baseURI() internal pure override returns (string memory) {
@@ -121,43 +123,45 @@ contract Endorser is
     ///
     /// Requirements:
     ///
-    /// - The leaf produced by the `digest` and `to` must derive to the `root` using the `proof`.
-    /// - The `root` was witnessed by the Witness.
-    /// - The `leaf` was not nullified before.
+    /// - The leaf was not nullified before.
+    /// - The mint request was signed by an authorizer.
+    /// - The authorizer is a member of the PROVENANCE_AUTHORIZER_ROLE.
+    /// - The proof is valid according to the Witness contract.
     function _validateAndNullifyProof(
-        address to,
-        bytes32 digest,
-        Proof calldata proof,
-        address authorizer,
-        bytes calldata authorizerSignature
+        MintRequestData calldata request,   
+        Proof calldata proof
     ) internal {
         EndorserStorage storage $ = _getEndorserStorage();
-        bytes32 leaf = getProvenanceHash(abi.encode(to, digest));
-
-        // Sanity check
-        if (leaf != proof.leaf) revert MismatchedLeaf();
 
         // Already nullified
-        if ($._nullifier.get(uint256(leaf))) revert AlreadyClaimed();
+        if ($._nullifier.get(uint256(proof.leaf))) revert AlreadyClaimed();
 
         // Verify authorizer signature
         if (
             !SignatureChecker.isValidSignatureNow(
-                authorizer,
-                MessageHashUtils.toEthSignedMessageHash(leaf),
-                authorizerSignature
+                request.authorizer,
+                _hashTypedDataV4(
+                    keccak256(
+                        abi.encode(
+                            _MINT_AUTHORIZATION_TYPEHASH,
+                            proof.leaf,
+                            request.to
+                        )
+                    )
+                ),
+                request.signature
             )
         ) revert InvalidAuthorization();
 
         // Check if the authorizer is a member of the PROVENANCE_AUTHORIZER_ROLE
         (bool isMember, ) = IAccessManager(authority()).hasRole(
             PROVENANCE_AUTHORIZER_ROLE,
-            authorizer
+            request.authorizer
         );
         if (!isMember) revert InvalidAuthorization();
 
         // Nullify leaf
-        $._nullifier.set(uint256(leaf));
+        $._nullifier.set(uint256(proof.leaf));
 
         // Reverts on invalid proof
         this.verifyProof(proof);

@@ -38,11 +38,11 @@ contract Deploy is BaseScript {
             abi.encode(PLUMAA_MULTISIG)
         );
         address manager = createX.deployCreate2(
-            _toSalt(0xc71e67c14a7af703583551),
+            _toSalt(0x02a28ef7ac76fc035bed56),
             code
         );
         console2.log("AccessManager contract deployed to %s", address(manager));
-        assert(0x00BA769e700657aDC3bB4Fb62315034bf65105aA == manager);
+        assert(0x00AaE6c51303407F8ae2d8a0323c9e4CA63eeCAa == manager);
         return manager;
     }
 
@@ -59,14 +59,14 @@ contract Deploy is BaseScript {
             )
         );
         address endorserProxy = createX.deployCreate2(
-            _toSalt(0xb14cb019d151f2038a6a61),
+            _toSalt(0x1ce43148b8fcff0318961f),
             code
         );
         console2.log(
             "Endorser contract deployed to %s",
             address(endorserProxy)
         );
-        assert(0x009079A0E192A3cAebbfC96db1D22e6Aa4458CaA == endorserProxy);
+        assert(0x003104BA7C02A86FA9337059F8df34614c8d46aa == endorserProxy);
         return endorserProxy;
     }
 
