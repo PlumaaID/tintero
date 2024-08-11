@@ -2,16 +2,21 @@
 pragma solidity ^0.8.20;
 
 import {BaseTest} from "./Base.t.sol";
-import {Merkle} from "murky/Merkle.sol";
-import {Witness} from "~/Witness.sol";
 import {ICreateX} from "createx/ICreateX.sol";
 import {AccessManager} from "@openzeppelin/contracts/access/manager/AccessManager.sol";
+import {IWitness, Proof} from "@WitnessCo/interfaces/IWitness.sol";
+import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
+import {Endorser} from "~/Endorser.sol";
+
 import {console2} from "forge-std/console2.sol";
 
 contract EndorserTest is BaseTest {
+    bytes32 internal constant _MINT_AUTHORIZATION_TYPEHASH =
+        keccak256("MintRequest(bytes32 leaf,address to)");
+
     function testInitialized() public {
         vm.expectRevert();
-        endorser.initialize(address(accessManager), address(witness));
+        endorser.initialize(address(accessManager), WITNESS);
     }
 
     function testAccessManager() public view {
@@ -19,61 +24,58 @@ contract EndorserTest is BaseTest {
     }
 
     function testWitness() public view {
-        assertEq(address(endorser.witness()), address(witness));
+        assertEq(address(endorser.WITNESS()), address(WITNESS));
     }
 
-    function testMint(address minter, address receiver, bytes32 digest) public {
-        vm.assume(receiver.code.length == 0 && receiver != address(0));
+    function testMintRequest(
+        bytes32 leaf,
+        address to,
+        address minter,
+        string memory authorizerSeed
+    ) public {
+        vm.assume(to.code.length == 0 && to != address(0));
 
-        // Setup roles
-        bytes4[] memory selectors = new bytes4[](1);
-        selectors[0] = Witness.witness.selector;
-        accessManager.setTargetFunctionRole(
-            address(witness),
-            selectors,
-            relayerRole
+        // Create a mint request with authorization signature
+        (address authorizer, uint256 authorizerPk) = makeAddrAndKey(
+            authorizerSeed
         );
-        // So we can witness the merkle root
-        accessManager.grantRole(relayerRole, address(this), 0);
+        accessManager.grantRole(PROVENANCE_AUTHORIZER_ROLE, authorizer, 0);
+        Endorser.MintRequestData memory mintRequest = Endorser.MintRequestData({
+            authorizer: authorizer,
+            to: to,
+            signature: _getAuthorizationSignature(authorizerPk, leaf, to)
+        });
 
-        // The leaf is the receiver and the digest
-        bytes32 leaf = keccak256(
-            bytes.concat(keccak256(abi.encode(receiver, digest)))
-        );
-
-        // Initialize
-        Merkle m = new Merkle();
-        // Toy Data
-        bytes32[] memory data = new bytes32[](4);
-        data[0] = bytes32("0x00");
-        data[1] = bytes32("0x01");
-        data[2] = bytes32("0x02");
-        // The leaf
-        data[3] = leaf;
-
-        bytes32 root = m.getRoot(data);
-        bytes32[] memory proof = m.getProof(data, 3); // Proof for our leaf
-
-        // Witness root
-        witness.witness(root);
+        // Mock a Witness proof
+        Proof memory mockProof = Proof({
+            index: uint256(0),
+            leaf: leaf,
+            leftRange: new bytes32[](0),
+            rightRange: new bytes32[](0),
+            targetRoot: bytes32(0)
+        });
 
         // Mint
         vm.prank(minter);
-        endorser.mint(receiver, digest, root, proof);
-        assertEq(endorser.ownerOf(uint256(digest)), receiver);
+        endorser.setMockVal(true);
+        endorser.mint(mintRequest, mockProof);
+        assertEq(endorser.ownerOf(uint256(leaf)), mintRequest.to);
         assertNotEq(block.timestamp, 0);
+
+        // Can't mint the same leaf again
+        vm.prank(minter);
+        vm.expectRevert();
+        endorser.mint(mintRequest, mockProof);
     }
 
-    function testFailMint(
+    function testFailMintRequest(
         address minter,
-        address receiver,
-        bytes32 digest,
-        bytes32 root,
-        bytes32[] memory proof
+        Endorser.MintRequestData calldata mintRequest,
+        Proof calldata proof
     ) public {
         vm.prank(minter);
         vm.expectRevert(bytes4(keccak256("InvalidProof")));
-        endorser.mint(receiver, digest, root, proof);
+        endorser.mint(mintRequest, proof);
     }
 
     function testFailApproval(address to, uint256 tokenId) public {
@@ -90,5 +92,48 @@ contract EndorserTest is BaseTest {
         vm.prank(approver);
         vm.expectRevert(bytes4(keccak256("UnsupportedOperation")));
         endorser.setApprovalForAll(operator, approved);
+    }
+
+    function _getAuthorizationSignature(
+        uint256 authorizerPk,
+        bytes32 leaf,
+        address to
+    ) private view returns (bytes memory) {
+        bytes32 structHash = keccak256(
+            abi.encode(_MINT_AUTHORIZATION_TYPEHASH, leaf, to)
+        );
+
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(
+            authorizerPk,
+            keccak256(
+                abi.encodePacked("\x19\x01", _getDomainSeparator(), structHash)
+            )
+        );
+
+        return abi.encodePacked(r, s, v);
+    }
+
+    function _getDomainSeparator() private view returns (bytes32) {
+        (
+            ,
+            string memory name,
+            string memory version,
+            uint256 chainId,
+            address verifyingContract,
+            ,
+
+        ) = endorser.eip712Domain();
+        return
+            keccak256(
+                abi.encode(
+                    keccak256(
+                        "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
+                    ),
+                    keccak256(bytes(name)),
+                    keccak256(bytes(version)),
+                    chainId,
+                    verifyingContract
+                )
+            );
     }
 }
