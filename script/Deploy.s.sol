@@ -59,14 +59,10 @@ contract Deploy is BaseScript {
             )
         );
         address endorserProxy = createX.deployCreate2(
-            _toSalt(0x1ce43148b8fcff0318961f),
+            _toSalt(0x6a70120e3856fe037eeade),
             code
         );
-        console2.log(
-            "Endorser contract deployed to %s",
-            address(endorserProxy)
-        );
-        assert(0x003104BA7C02A86FA9337059F8df34614c8d46aa == endorserProxy);
+        assert(0x009a67D5a2D4DA9B87d9AD6d1BCf778bF87958Aa == endorserProxy);
         return endorserProxy;
     }
 

@@ -128,7 +128,7 @@ contract Endorser is
     /// - The authorizer is a member of the PROVENANCE_AUTHORIZER_ROLE.
     /// - The proof is valid according to the Witness contract.
     function _validateAndNullifyProof(
-        MintRequestData calldata request,   
+        MintRequestData calldata request,
         Proof calldata proof
     ) internal {
         EndorserStorage storage $ = _getEndorserStorage();
@@ -181,27 +181,4 @@ contract Endorser is
     function _authorizeUpgrade(
         address newImplementation
     ) internal override restricted {}
-
-    /// @dev Performs a Solidity function call using a low level `call` and returns the first 32 bytes of the result
-    /// in the scratch space of memory. Useful for functions that return a single-word value.
-    ///
-    /// WARNING: Do not assume that the result is zero if `success` is false. Memory can be already allocated
-    /// and this function doesn't zero it out.
-    function _callReturnBytes32(
-        address target,
-        bytes memory data
-    ) internal returns (bool success, bytes32 result) {
-        assembly ("memory-safe") {
-            success := call(
-                gas(),
-                target,
-                0,
-                add(data, 0x20),
-                mload(data),
-                0,
-                0x20
-            )
-            result := mload(0)
-        }
-    }
 }
