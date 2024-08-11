@@ -20,8 +20,8 @@ make
 
 | Network          | ChainID | Access Manager                             | Endorser Proxy                             |
 | ---------------- | ------- | ------------------------------------------ | ------------------------------------------ |
-| Arbitrum         | 42161   | 0x00AaE6c51303407F8ae2d8a0323c9e4CA63eeCAa | 0x003104BA7C02A86FA9337059F8df34614c8d46aa |
-| Arbitrum Sepolia | 421614  | 0x00AaE6c51303407F8ae2d8a0323c9e4CA63eeCAa | 0x003104BA7C02A86FA9337059F8df34614c8d46aa |
+| Arbitrum         | 42161   | 0x00AaE6c51303407F8ae2d8a0323c9e4CA63eeCAa | 0x009a67D5a2D4DA9B87d9AD6d1BCf778bF87958Aa |
+| Arbitrum Sepolia | 421614  | 0x00AaE6c51303407F8ae2d8a0323c9e4CA63eeCAa | 0x009a67D5a2D4DA9B87d9AD6d1BCf778bF87958Aa |
 
 ## Roles
 
@@ -32,7 +32,7 @@ make
 
 | Role     | Function signature                | Selector | Target contract                            |
 | -------- | --------------------------------- | -------- | ------------------------------------------ |
-| UPGRADER | `upgradeToAndCall(address,bytes)` | 4f1ef286 | 0x003104BA7C02A86FA9337059F8df34614c8d46aa |
+| UPGRADER | `upgradeToAndCall(address,bytes)` | 4f1ef286 | 0x009a67D5a2D4DA9B87d9AD6d1BCf778bF87958Aa |
 
 ### Role members
 
