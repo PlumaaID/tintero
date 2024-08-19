@@ -8,7 +8,6 @@ import {EIP712Upgradeable} from "@openzeppelin/contracts-upgradeable/utils/crypt
 import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import {IAccessManager} from "@openzeppelin/contracts/access/manager/IAccessManager.sol";
 import {AccessManagedUpgradeable} from "@openzeppelin/contracts-upgradeable/access/manager/AccessManagedUpgradeable.sol";
-import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import {SignatureChecker} from "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
 import {BitMaps} from "@openzeppelin/contracts/utils/structs/BitMaps.sol";
@@ -103,6 +102,13 @@ contract Endorser is
     ) external {
         _validateAndNullifyProof(request, proof);
         _safeMint(request.to, uint256(proof.leaf));
+    }
+
+    /// @notice Sets the Witness contract
+    /// NOTE: Witness is set by default to the mainnet address, it should be updated
+    /// to the correct address before deployment when deploying to testnets.
+    function setWitness(IWitness witness) external restricted {
+        _getEndorserStorage()._witness = witness;
     }
 
     function _baseURI() internal pure override returns (string memory) {

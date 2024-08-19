@@ -78,6 +78,21 @@ contract EndorserTest is BaseTest {
         endorser.mint(mintRequest, proof);
     }
 
+    function testSetWitness(IWitness newWitness, address setter) public {
+        uint64 roleId = uint64(bytes8(keccak256("PlumaaID.WITNESS_SETTER")));
+        bytes4[] memory selectors = new bytes4[](1);
+        selectors[0] = Endorser.setWitness.selector;
+        accessManager.setTargetFunctionRole(
+            address(endorser),
+            selectors,
+            roleId
+        );
+        accessManager.grantRole(roleId, setter, 0);
+        vm.prank(setter);
+        endorser.setWitness(newWitness);
+        assertEq(address(endorser.WITNESS()), address(newWitness));
+    }
+
     function testFailApproval(address to, uint256 tokenId) public {
         vm.prank(endorser.ownerOf(tokenId));
         vm.expectRevert();

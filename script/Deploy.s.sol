@@ -12,15 +12,14 @@ import {IWitness} from "@WitnessCo/interfaces/IWitness.sol";
 
 /// @dev See the Solidity Scripting tutorial: https://book.getfoundry.sh/tutorials/solidity-scripting
 contract Deploy is BaseScript {
-    address constant PLUMAA_DEPLOYER_EOA =
+    address public constant PLUMAA_DEPLOYER_EOA =
         0x00560ED8242bF346c162c668487BaCD86cc0B8aa;
-    address constant PLUMAA_MULTISIG =
-        0x00fA8957dC3D2f6081360056bf2f6d4b5f1a49aa;
-    address constant CREATE_X = 0xba5Ed099633D3B313e4D5F7bdc1305d3c28ba5Ed;
+    address public constant CREATE_X =
+        0xba5Ed099633D3B313e4D5F7bdc1305d3c28ba5Ed;
     ICreateX public createX;
 
     // From https://docs.witness.co/additional-notes/deployments
-    IWitness constant WITNESS =
+    IWitness public constant WITNESS =
         IWitness(0x0000000e143f453f45B2E1cCaDc0f3CE21c2F06a);
 
     function setUp() public {
@@ -35,14 +34,14 @@ contract Deploy is BaseScript {
     function _deployManager() internal returns (address) {
         bytes memory code = abi.encodePacked(
             type(AccessManager).creationCode,
-            abi.encode(PLUMAA_MULTISIG)
+            abi.encode(PLUMAA_DEPLOYER_EOA)
         );
         address manager = createX.deployCreate2(
-            _toSalt(0x02a28ef7ac76fc035bed56),
+            _toSalt(0xba1f57682a65f603805740),
             code
         );
         console2.log("AccessManager contract deployed to %s", address(manager));
-        assert(0x00AaE6c51303407F8ae2d8a0323c9e4CA63eeCAa == manager);
+        assert(0x00658172E5ABbaD053B3498a3f338198F940AaaA == manager);
         return manager;
     }
 
@@ -59,10 +58,10 @@ contract Deploy is BaseScript {
             )
         );
         address endorserProxy = createX.deployCreate2(
-            _toSalt(0x6a70120e3856fe037eeade),
+            _toSalt(0x92255ae086defd037beb77),
             code
         );
-        assert(0x009a67D5a2D4DA9B87d9AD6d1BCf778bF87958Aa == endorserProxy);
+        assert(0x007D52Aaf565f34a1267eF54CB9B1C10B5Da9aAa == endorserProxy);
         return endorserProxy;
     }
 
