@@ -21,8 +21,6 @@ import {WitnessConsumer} from "@WitnessCo/WitnessConsumer.sol";
 /// the [Witness](https://docs.witness.co/api-reference/solidity/Witness.sol) and a valid signature from an authorizer.
 /// Privacy is ensured by only tracking the hash of the document, and not the document itself.
 ///
-/// Approvals are not enabled since there's no regulatory clarity on the matter. Contract may upgrade to enable approvals.
-///
 /// NOTE: Property is tied to regular Ethereum addresses. It's the responsibility of the developer to implement a robust
 /// regulatory framework to ensure the link between the owner and such address.
 ///
@@ -61,7 +59,6 @@ contract Endorser is
         IWitness _witness;
     }
 
-    error UnsupportedOperation();
     error AlreadyClaimed();
     error InvalidAuthorization();
 
@@ -112,17 +109,7 @@ contract Endorser is
     }
 
     function _baseURI() internal pure override returns (string memory) {
-        return "https://api.plumaa.id/protocol/metadata/";
-    }
-
-    /// @notice Disables token approvals
-    function _approve(address, uint256, address, bool) internal pure override {
-        revert UnsupportedOperation();
-    }
-
-    /// @notice Disables approvals
-    function _setApprovalForAll(address, address, bool) internal pure override {
-        revert UnsupportedOperation();
+        return "https://api.plumaa.id/protocol/endorser/metadata/";
     }
 
     /// @notice Checks whether a proof is valid and nullifies it so it can't be used again.

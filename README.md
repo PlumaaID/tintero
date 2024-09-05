@@ -22,15 +22,15 @@ make
 
 | Network          | ChainID | Address                                    |
 | ---------------- | ------- | ------------------------------------------ |
-| Arbitrum         | 42161   | 0x007D52Aaf565f34a1267eF54CB9B1C10B5Da9aAa |
-| Arbitrum Sepolia | 421614  | 0x007D52Aaf565f34a1267eF54CB9B1C10B5Da9aAa |
+| Arbitrum         | 42161   | 0x0000c908D1104caD2867Ec2A8Bb178D78C9bAaaa |
+| Arbitrum Sepolia | 421614  | 0x0000c908D1104caD2867Ec2A8Bb178D78C9bAaaa |
 
 #### Access Manager
 
 | Network          | ChainID | Address                                    |
 | ---------------- | ------- | ------------------------------------------ |
-| Arbitrum         | 42161   | 0x00658172E5ABbaD053B3498a3f338198F940AaaA |
-| Arbitrum Sepolia | 421614  | 0x00658172E5ABbaD053B3498a3f338198F940AaaA |
+| Arbitrum         | 42161   | 0x0000593Daa1e9E24FEe19AF6B258A268c97aAAAa |
+| Arbitrum Sepolia | 421614  | 0x0000593Daa1e9E24FEe19AF6B258A268c97aAAAa |
 
 ## Roles
 
@@ -42,8 +42,8 @@ make
 
 | Role           | Function signature                | Selector | Target contract                            |
 | -------------- | --------------------------------- | -------- | ------------------------------------------ |
-| UPGRADER       | `upgradeToAndCall(address,bytes)` | 4f1ef286 | 0x007D52Aaf565f34a1267eF54CB9B1C10B5Da9aAa |
-| WITNESS_SETTER | `setWitness(address)`             | 0bc14f8b | 0x007D52Aaf565f34a1267eF54CB9B1C10B5Da9aAa |
+| UPGRADER       | `upgradeToAndCall(address,bytes)` | 4f1ef286 | 0x0000c908D1104caD2867Ec2A8Bb178D78C9bAaaa |
+| WITNESS_SETTER | `setWitness(address)`             | 0bc14f8b | 0x0000c908D1104caD2867Ec2A8Bb178D78C9bAaaa |
 
 ### Role members
 

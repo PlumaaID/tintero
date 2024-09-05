@@ -93,22 +93,6 @@ contract EndorserTest is BaseTest {
         assertEq(address(endorser.WITNESS()), address(newWitness));
     }
 
-    function testFailApproval(address to, uint256 tokenId) public {
-        vm.prank(endorser.ownerOf(tokenId));
-        vm.expectRevert();
-        endorser.approve(to, tokenId);
-    }
-
-    function testFailSetApprovalForAll(
-        address approver,
-        address operator,
-        bool approved
-    ) public {
-        vm.prank(approver);
-        vm.expectRevert(bytes4(keccak256("UnsupportedOperation")));
-        endorser.setApprovalForAll(operator, approved);
-    }
-
     function _getAuthorizationSignature(
         uint256 authorizerPk,
         bytes32 leaf,
