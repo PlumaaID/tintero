@@ -89,8 +89,8 @@ interface IERC721CollateralLoan {
     /// @dev Only the beneficiary can perform the operation.
     error OnlyBeneficiary();
 
-    /// @dev The provided address is the zero address.
-    error ZeroAddress();
+    /// @dev The beneficiary address is not valid.
+    error InvalidBeneficiary();
 
     /// @dev The payments array doesn't match the collateral tokenIds array.
     error MismatchedPaymentCollateralIds();

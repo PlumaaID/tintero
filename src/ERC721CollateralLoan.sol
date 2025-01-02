@@ -61,7 +61,8 @@ contract ERC721CollateralLoan is
     ) public initializer {
         __AccessManaged_init(authority_);
         LoanStorage storage $ = getERC721CollateralLoanStorage();
-        if (beneficiary_ == address(0)) revert ZeroAddress();
+        if (beneficiary_ == address(0) || beneficiary_ != liquidityProvider_)
+            revert InvalidBeneficiary();
         $.liquidityProvider = IERC4626(liquidityProvider_);
         $.collateralAsset = ERC721Burnable(collateralAsset_);
         $.beneficiary = beneficiary_;
@@ -277,10 +278,10 @@ contract ERC721CollateralLoan is
         );
 
         // Effects
-        uint256 totalPrincipal = _preRepayN(n);
+        uint256 toPay = _preRepayN(n);
 
         // Interactions
-        _repayN(n, collateralReceiver, totalPrincipal);
+        _repayN(n, collateralReceiver, toPay);
     }
 
     /// @dev Repossess the collateral from payments.
@@ -449,11 +450,7 @@ contract ERC721CollateralLoan is
         // Interactions
         for (uint256 i = start; i < end; i++) {
             (uint256 tokenId, PaymentLib.Payment memory payment_) = payment(i);
-            collateralAsset().safeTransferFrom(
-                address(this),
-                beneficiary(),
-                tokenId
-            );
+            _transferCollateral(tokenId, beneficiary(), payment_.principal);
             emit WithdrawnPayment(i, tokenId, payment_.principal);
         }
     }
@@ -474,16 +471,14 @@ contract ERC721CollateralLoan is
         LoanStorage storage $ = getERC721CollateralLoanStorage();
         $.currentPaymentIndex = SafeCast.toUint16(end);
 
-        uint256 totalPrincipal = 0;
+        uint256 toPay = 0;
         for (uint256 i = start; i < end; i++) {
             (
                 uint256 collateralTokenId,
                 PaymentLib.Payment memory payment_
             ) = payment(i);
             uint48 timepoint = Time.timestamp();
-            totalPrincipal +=
-                payment_.principal +
-                payment_.accruedInterest(timepoint);
+            toPay += payment_.principal + payment_.accruedInterest(timepoint);
             emit RepaidPayment(
                 i,
                 collateralTokenId,
@@ -493,7 +488,7 @@ contract ERC721CollateralLoan is
             );
         }
 
-        return totalPrincipal;
+        return toPay;
     }
 
     /// @dev Repays the current loan and `n` future payments.
@@ -510,26 +505,26 @@ contract ERC721CollateralLoan is
     function _repayN(
         uint256 n,
         address collateralReceiver,
-        uint256 totalPrincipal
+        uint256 toPay
     ) internal {
         for (uint256 i = start; i < end; i++) {
             (uint256 tokenId, PaymentLib.Payment memory payment_) = payment(i);
             if (collateralReceiver == address(0))
                 collateralAsset().burn(tokenId);
-            else {
-                collateralAsset().safeTransferFrom(
-                    address(this),
-                    liquidityProvider(),
-                    tokenId
+            else
+                _transferCollateral(
+                    tokenId,
+                    collateralReceiver,
+                    payment_.principal
                 );
-            }
+
             // No need to update heldTokenIds since they can't be transferred back anymore
         }
 
         lendingAsset().safeTransferFrom(
             beneficiary(),
             liquidityProvider(),
-            totalPrincipal
+            toPay
         );
     }
 
@@ -551,10 +546,10 @@ contract ERC721CollateralLoan is
 
         for (uint256 i = start; i < end; i++) {
             (uint256 tokenId, PaymentLib.Payment memory payment_) = payment(i);
-            collateralAsset().safeTransferFrom(
-                address(this),
+            _transferCollateral(
+                tokenId,
                 liquidityProvider(),
-                tokenId
+                payment_.principal
             );
             // No need to update heldTokenIds since they can't be transferred back anymore
             emit RepossessedPayment(i, tokenId, payment_.principal);
@@ -593,6 +588,25 @@ contract ERC721CollateralLoan is
         LoanState loanState
     ) private pure returns (bytes32) {
         return bytes32(1 << uint8(loanState));
+    }
+
+    function _transferCollateral(
+        uint256 tokenId,
+        address to,
+        uint256 principal
+    ) private {
+        collateralAsset().safeTransferFrom(
+            address(this),
+            to,
+            tokenId,
+            _encodeCollateralData(principal)
+        );
+    }
+
+    function _encodeCollateralData(
+        uint256 paidPrincipal
+    ) private pure returns (bytes memory) {
+        return abi.encode(paidPrincipal);
     }
 
     /// @notice Get EIP-7201 storage

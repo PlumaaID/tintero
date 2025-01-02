@@ -36,7 +36,7 @@ contract Tintero is ERC4626, AccessManaged, ERC721Holder {
         IERC20Metadata asset_,
         address authority_
     )
-        ERC20(_t(asset_.name()), _t(asset_.symbol()))
+        ERC20(_prefix("t", asset_.name()), _prefix("Tinted", asset_.symbol()))
         ERC4626(asset_)
         AccessManaged(authority_)
     {}
@@ -58,6 +58,10 @@ contract Tintero is ERC4626, AccessManaged, ERC721Holder {
     /// @dev The total amount of assets lent to a Loan contract.
     function lentTo(address _loan) external view returns (uint256) {
         return _lentTo[_loan];
+    }
+
+    function isLoan(address loan) external view returns (bool) {
+        return _loans.contains(loan);
     }
 
     /// @dev The maximum amount of assets that can be withdrawn.
@@ -124,29 +128,42 @@ contract Tintero is ERC4626, AccessManaged, ERC721Holder {
     /*** Manager Functions ***/
     /*************************/
 
-    function relay(
+    function pushPayments(
         ERC721CollateralLoan loan,
-        bytes calldata data
+        uint256[] calldata collateralTokenIds,
+        PaymentLib.Payment[] calldata payment_
     ) external restricted {
         address loan_ = address(loan);
-        require(_loans.contains(loan_));
+        require(isLoan(loan_));
 
-        uint256 assetsBalance = totalAssets();
-        Address.functionCall(loan_, data);
+        loan.pushPayments(collateralTokenIds, payment_);
+    }
 
-        bytes4 selector = bytes4(data[0:4]);
+    function fundN(ERC721CollateralLoan loan, uint256 n) external restricted {
+        address loan_ = address(loan);
+        require(isLoan(loan_));
 
-        if (selector == loan.fundN.selector) {
-            uint256 newAssetsBalance = totalAssets();
-            uint256 totalPrincipalFunded = newAssetsBalance - assetsBalance;
-            _lentTo[loan_] += totalPrincipalFunded;
-            _totalAssetsLent += totalPrincipalFunded;
-        } else if (selector == loan.reposses.selector) {
-            uint256 newAssetsBalance = totalAssets();
-            uint256 totalPrincipalLost = assetsBalance - newAssetsBalance;
-            _lentTo[loan_] -= totalPrincipalLost;
-            _totalAssetsLent -= totalPrincipalLost;
-        } else assert(assetsBalance == totalAssets());
+        IERC20Metadata asset_ = IERC20Metadata(asset());
+        uint256 assetsBalance = asset_.balanceOf(address(this));
+        loan.fundN(n);
+        uint256 newAssetsBalance = asset_.balanceOf(address(this));
+        uint256 totalPrincipalFunded = newAssetsBalance - assetsBalance;
+        _lentTo[loan_] += totalPrincipalFunded;
+        _totalAssetsLent += totalPrincipalFunded;
+    }
+
+    function repossess(
+        ERC721CollateralLoan loan,
+        uint256 start,
+        uint256 end
+    ) external restricted {
+        address loan_ = address(loan);
+        require(isLoan(loan_));
+
+        uint256 principalLost = _lentTo[loan_];
+        loan.repossess(start, end);
+        _totalAssetsLent -= principalLost;
+        assert(_lentTo[loan_] == 0);
     }
 
     /**************************/
@@ -171,8 +188,11 @@ contract Tintero is ERC4626, AccessManaged, ERC721Holder {
     /*** Private Functions ***/
     /*************************/
 
-    function _t(string memory _str) internal pure returns (string memory) {
-        return string(abi.encodePacked("t", _str));
+    function _prefix(
+        string memory _p,
+        string memory _str
+    ) internal pure returns (string memory) {
+        return string(abi.encodePacked(_p, _str));
     }
 
     /// @dev Implementation of keccak256(abi.encode(a, b)) that doesn't allocate or expand memory.
@@ -193,7 +213,9 @@ contract Tintero is ERC4626, AccessManaged, ERC721Holder {
         uint256 tokenId,
         bytes calldata data
     ) public override returns (bytes4) {
-        require(_loans.contains(operator));
+        require(isLoan(operator));
+        uint256 principal = abi.decode(data, (uint256));
+        _lentTo[operator] -= principal;
         return super.onERC721Received(operator, from, tokenId, data);
     }
 }
