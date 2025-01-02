@@ -27,9 +27,9 @@ contract Tintero is ERC4626, AccessManaged, ERC721Holder {
     address public immutable ERC721_COLLATERAL_LOAN_IMPLEMENTATION =
         address(new ERC721CollateralLoan());
 
-    // Invariant: _lentAssets == sum(_committedAssets)
-    uint256 private _lentAssets;
-    mapping(address loan => uint256 assets) private _committedAssets;
+    // Invariant: _totalAssetsLent == sum(_lentTo)
+    uint256 private _totalAssetsLent;
+    mapping(address loan => uint256 assets) private _lentTo;
     EnumerableSet.AddressSet private _loans;
 
     constructor(
@@ -47,17 +47,17 @@ contract Tintero is ERC4626, AccessManaged, ERC721Holder {
 
     /// @inheritdoc ERC4626
     function totalAssets() public view override returns (uint256) {
-        return super.totalAssets() + _lentAssets;
+        return super.totalAssets() + _totalAssetsLent;
     }
 
     /// @dev The total amount of assets lent to Loan contracts.
-    function lentAssets() external view returns (uint256) {
-        return _lentAssets;
+    function totalAssetsLent() external view returns (uint256) {
+        return _totalAssetsLent;
     }
 
     /// @dev The total amount of assets lent to a Loan contract.
-    function committedAssets(address _loan) external view returns (uint256) {
-        return _committedAssets[_loan];
+    function lentTo(address _loan) external view returns (uint256) {
+        return _lentTo[_loan];
     }
 
     /// @dev The maximum amount of assets that can be withdrawn.
@@ -134,13 +134,19 @@ contract Tintero is ERC4626, AccessManaged, ERC721Holder {
         uint256 assetsBalance = totalAssets();
         Address.functionCall(loan_, data);
 
-        if (bytes4(data[0:4]) == loan.fundN.selector) {
-            uint256 totalPrincipalAmount = abi.decode(retData, (uint256));
-            _committedAssets[loan_] += totalPrincipalFunded;
-            _lentAssets += totalPrincipalFunded;
-        }
+        bytes4 selector = bytes4(data[0:4]);
 
-        assert(assetsBalance == totalAssets());
+        if (selector == loan.fundN.selector) {
+            uint256 newAssetsBalance = totalAssets();
+            uint256 totalPrincipalFunded = newAssetsBalance - assetsBalance;
+            _lentTo[loan_] += totalPrincipalFunded;
+            _totalAssetsLent += totalPrincipalFunded;
+        } else if (selector == loan.reposses.selector) {
+            uint256 newAssetsBalance = totalAssets();
+            uint256 totalPrincipalLost = assetsBalance - newAssetsBalance;
+            _lentTo[loan_] -= totalPrincipalLost;
+            _totalAssetsLent -= totalPrincipalLost;
+        } else assert(assetsBalance == totalAssets());
     }
 
     /**************************/
@@ -179,5 +185,15 @@ contract Tintero is ERC4626, AccessManaged, ERC721Holder {
             mstore(0x20, b)
             value := keccak256(0x00, 0x40)
         }
+    }
+
+    function onERC721Received(
+        address operator,
+        address from,
+        uint256 tokenId,
+        bytes calldata data
+    ) public override returns (bytes4) {
+        require(_loans.contains(operator));
+        return super.onERC721Received(operator, from, tokenId, data);
     }
 }
