@@ -18,22 +18,24 @@ import {LoanState} from "./ITinteroLoan.types.sol";
 /// stateDiagram-v2
 ///     state CREATED
 ///     state CANCELED
+///     state FUNDING
 ///     state FUNDED
 ///     state DEFAULTED
-///
+///     state REPOSSESSED
+///     state PAID
+
 ///     [*] --> CREATED
+///     CREATED --> FUNDING: calling fundN(...)
+///     FUNDING --> FUNDED: calling fundN(...)
 ///     CREATED --> FUNDED: calling fundN(...)
 ///     CREATED --> CANCELED: calling withdrawPaymentCollateral()
 ///     FUNDED --> DEFAULTED: after defaultThreshold() payments are missed
 ///     FUNDED --> PAID: calling repayN(...)
-///     DEFAULTED --> REPOSSESSED: calling repossess(...)
+///     DEFAULTED --> REPOSSESSED: calling recall(...)
 ///     DEFAULTED --> FUNDED: calling repayN(...)
 ///     DEFAULTED --> PAID: calling repayN(...)
 /// ```
-interface ITinteroLoan is
-    ITinteroLoanEvents,
-    ITinteroLoanErrors
-{
+interface ITinteroLoan is ITinteroLoanEvents, ITinteroLoanErrors {
     /// @dev Address of the ERC20 token lent.
     function lendingAsset() external view returns (IERC20);
 
@@ -105,7 +107,7 @@ interface ITinteroLoan is
     ///
     /// Requirements:
     ///
-    /// - The loan MUST be in CREATED state.
+    /// - The loan MUST be in CREATED or FUNDING state.
     /// - The liquidityProvider MUST have enough funds to repay the principal of the current payment
     /// - This contract mus have been approved to transfer the principal
     ///   amount from the liquidity provider.

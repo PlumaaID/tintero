@@ -109,7 +109,7 @@ contract TinteroLoan is
     ///
     /// Requirements:
     ///
-    /// - The loan MUST be in CREATED state.
+    /// - The loan MUST be in CREATED or FUNDING state.
     /// - The liquidityProvider MUST have enough funds to repay the principal of the current payment
     /// - This contract mus have been approved to transfer the principal
     ///   amount from the liquidity provider.
@@ -122,7 +122,10 @@ contract TinteroLoan is
     /// - The principal of the funded payments is transferred from the liquidity provider to the beneficiary.
     function fundN(uint256 n) external returns (uint256) {
         // Checks
-        _validateStateBitmap(_encodeStateBitmap(LoanState.CREATED));
+        _validateStateBitmap(
+            _encodeStateBitmap(LoanState.CREATED) |
+                _encodeStateBitmap(LoanState.FUNDING)
+        );
         if (n == 0) return 0;
 
         // Effects

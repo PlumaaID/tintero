@@ -75,13 +75,20 @@ abstract contract TinteroLoanView is TinteroLoanStorage {
 
     /// @dev Get the current state of the loan.
     function state() public view returns (LoanState) {
+        uint256 fundingIndex = currentFundingIndex();
         LoanStorage storage $ = getTinteroLoanStorage();
 
         if ($._repossessed) return LoanState.REPOSSESSED;
         uint256 current = currentPaymentIndex();
         if (current == totalPayments()) return LoanState.PAID;
         if ($._canceled) return LoanState.CANCELED;
+        if (_defaulted(current)) return LoanState.DEFAULTED;
+        if (fundingIndex == totalPayments()) return LoanState.FUNDED;
+        if (fundingIndex == 0) return LoanState.FUNDING;
+        return LoanState.CREATED;
+    }
 
+    function _defaulted(uint256 current) internal view returns (bool) {
         uint256 threshold = defaultThreshold();
         uint256 defaultAfter = current + threshold;
 
@@ -90,10 +97,8 @@ abstract contract TinteroLoanView is TinteroLoanStorage {
         for (uint256 i = current; i < defaultAfter; i++) {
             (, PaymentLib.Payment memory payment_) = payment(i);
             if (!payment_.matured()) break;
-            if (i == last) return LoanState.DEFAULTED;
+            if (i == last) return true;
         }
-
-        if (currentFundingIndex() == totalPayments()) return LoanState.FUNDED;
-        return LoanState.CREATED;
+        return false;
     }
 }

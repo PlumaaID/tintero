@@ -23,6 +23,9 @@ contract Tintero is ERC4626, ERC721Holder, TinteroLoanFactory {
 
     event LoanCreated(address loan);
 
+    /// @dev Reverts if a Loan contract is already created by this vault.
+    error DuplicatedLoan();
+
     /// @dev Reverts if the caller is not a Loan contract created by this vault.
     error OnlyAuthorizedLoan();
 
@@ -124,7 +127,7 @@ contract Tintero is ERC4626, ERC721Holder, TinteroLoanFactory {
             payments_,
             collateralTokenIds_
         );
-        require(_loans.add(predicted));
+        if (!_loans.add(predicted)) revert DuplicatedLoan();
     }
 
     /*************************/
