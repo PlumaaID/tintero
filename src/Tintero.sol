@@ -8,30 +8,33 @@ import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {ERC4626, ERC20} from "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol";
 import {AccessManaged} from "@openzeppelin/contracts/access/manager/AccessManaged.sol";
 import {ERC721Holder} from "@openzeppelin/contracts/token/ERC721/utils/ERC721Holder.sol";
-import {Clones} from "@openzeppelin/contracts/proxy/Clones.sol";
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
-import {Address} from "@openzeppelin/contracts/utils/Address.sol";
-import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 import {PaymentLib} from "./utils/PaymentLib.sol";
 import {ERC721CollateralLoan} from "./ERC721CollateralLoan.sol";
+import {ERC721CollateralLoanFactory} from "./ERC721CollateralLoan.factory.sol";
 
-/// @title Tintero Protocol
+/// @title Tintero Vault
 ///
 /// @notice An [ERC4626](https://docs.openzeppelin.com/contracts/5.x/erc4626) vault that receives
 /// an ERC20 token in exchange for shares and allocates these assets towards funding Loan contracts.
-contract Tintero is ERC4626, AccessManaged, ERC721Holder {
-    using Clones for address;
+contract Tintero is ERC4626, ERC721Holder, ERC721CollateralLoanFactory {
     using EnumerableSet for EnumerableSet.AddressSet;
 
-    address public immutable ERC721_COLLATERAL_LOAN_IMPLEMENTATION =
-        address(new ERC721CollateralLoan());
+    event LoanCreated(address loan);
+
+    /// @dev Reverts if the caller is not a Loan contract created by this vault.
+    error OnlyAuthorizedLoan();
 
     // Invariant: _totalAssetsLent == sum(_lentTo)
     uint256 private _totalAssetsLent;
     mapping(address loan => uint256 assets) private _lentTo;
     EnumerableSet.AddressSet private _loans;
 
+    /// @dev Constructor for Tintero.
+    ///
+    /// @param asset_ The ERC20 token to be lent.
+    /// @param authority_ The access manager for the vault.
     constructor(
         IERC20Metadata asset_,
         address authority_
@@ -45,22 +48,35 @@ contract Tintero is ERC4626, AccessManaged, ERC721Holder {
     /*** View Functions ***/
     /**********************/
 
+    /// @dev Receives ERC721 tokens from Loan contracts and updates the total lent assets.
+    function onERC721Received(
+        address operator,
+        address from,
+        uint256 tokenId,
+        bytes memory data
+    ) public override returns (bytes4) {
+        if (!isLoan(operator)) revert OnlyAuthorizedLoan();
+        uint256 principal = abi.decode(data, (uint256));
+        _lentTo[operator] -= principal;
+        return super.onERC721Received(operator, from, tokenId, data);
+    }
+
     /// @inheritdoc ERC4626
     function totalAssets() public view override returns (uint256) {
         return super.totalAssets() + _totalAssetsLent;
     }
 
     /// @dev The total amount of assets lent to Loan contracts.
-    function totalAssetsLent() external view returns (uint256) {
+    function totalAssetsLent() public view returns (uint256) {
         return _totalAssetsLent;
     }
 
     /// @dev The total amount of assets lent to a Loan contract.
-    function lentTo(address _loan) external view returns (uint256) {
+    function lentTo(address _loan) public view returns (uint256) {
         return _lentTo[_loan];
     }
 
-    function isLoan(address loan) external view returns (bool) {
+    function isLoan(address loan) public view returns (bool) {
         return _loans.contains(loan);
     }
 
@@ -91,13 +107,7 @@ contract Tintero is ERC4626, AccessManaged, ERC721Holder {
     /*** External Functions ***/
     /**************************/
 
-    function predictLoanAddress(
-        bytes32 salt,
-        address caller_
-    ) external view returns (address) {
-        return _predictLoanAddress(_salt(salt, caller_));
-    }
-
+    /// @dev Creates a new instance of a Loan contract with the provided parameters.
     function requestLoan(
         address collateralCollection_,
         address beneficiary_,
@@ -106,42 +116,44 @@ contract Tintero is ERC4626, AccessManaged, ERC721Holder {
         uint256[] calldata collateralTokenIds_,
         bytes32 salt
     ) external {
-        salt = _salt(salt, msg.sender);
-        address predicted = _predictLoanAddress(salt);
+        address predicted = _deployLoan(
+            salt,
+            collateralCollection_,
+            beneficiary_,
+            defaultThreshold_,
+            payments_,
+            collateralTokenIds_
+        );
         require(_loans.add(predicted));
-
-        if (predicted.code.length == 0) {
-            ERC721_COLLATERAL_LOAN_IMPLEMENTATION.cloneDeterministic(salt);
-            ERC721CollateralLoan(predicted).initialize(
-                authority(),
-                address(this),
-                collateralCollection_,
-                beneficiary_,
-                defaultThreshold_,
-                payments_,
-                collateralTokenIds_
-            );
-        }
     }
 
     /*************************/
     /*** Manager Functions ***/
     /*************************/
 
+    /// @dev Adds a list of payments to a Loan contract. Calls Loan#pushPayments.
+    ///
+    /// Requirements:
+    ///
+    /// - The loan MUST be created by this vault.
     function pushPayments(
         ERC721CollateralLoan loan,
         uint256[] calldata collateralTokenIds,
         PaymentLib.Payment[] calldata payment_
     ) external restricted {
-        address loan_ = address(loan);
-        require(isLoan(loan_));
+        if (!isLoan(address(loan))) revert OnlyAuthorizedLoan();
 
         loan.pushPayments(collateralTokenIds, payment_);
     }
 
+    /// @dev Funds `n` payments from a Loan contract. Calls Loan#fundN.
+    ///
+    /// Requirements:
+    ///
+    /// - The loan MUST be created by this vault.
     function fundN(ERC721CollateralLoan loan, uint256 n) external restricted {
         address loan_ = address(loan);
-        require(isLoan(loan_));
+        if (!isLoan(loan_)) revert OnlyAuthorizedLoan();
 
         IERC20Metadata asset_ = IERC20Metadata(asset());
         uint256 assetsBalance = asset_.balanceOf(address(this));
@@ -152,13 +164,18 @@ contract Tintero is ERC4626, AccessManaged, ERC721Holder {
         _totalAssetsLent += totalPrincipalFunded;
     }
 
+    /// @dev Repossess a range of payments from a Loan contract. Calls Loan#repossess.
+    ///
+    /// Requirements:
+    ///
+    /// - The loan MUST be created by this vault.
     function repossess(
         ERC721CollateralLoan loan,
         uint256 start,
         uint256 end
     ) external restricted {
         address loan_ = address(loan);
-        require(isLoan(loan_));
+        if (!isLoan(loan_)) revert OnlyAuthorizedLoan();
 
         uint256 principalLost = _lentTo[loan_];
         loan.repossess(start, end);
@@ -176,46 +193,15 @@ contract Tintero is ERC4626, AccessManaged, ERC721Holder {
         return 3;
     }
 
-    function _predictLoanAddress(bytes32 salt) internal view returns (address) {
-        return
-            ERC721_COLLATERAL_LOAN_IMPLEMENTATION.predictDeterministicAddress(
-                salt,
-                address(this)
-            );
-    }
-
     /*************************/
     /*** Private Functions ***/
     /*************************/
 
+    /// @dev Prefixes a string with a given prefix.
     function _prefix(
         string memory _p,
         string memory _str
     ) internal pure returns (string memory) {
         return string(abi.encodePacked(_p, _str));
-    }
-
-    /// @dev Implementation of keccak256(abi.encode(a, b)) that doesn't allocate or expand memory.
-    function _salt(
-        bytes32 salt,
-        address caller_
-    ) internal pure returns (bytes32) {
-        assembly ("memory-safe") {
-            mstore(0x00, a)
-            mstore(0x20, b)
-            value := keccak256(0x00, 0x40)
-        }
-    }
-
-    function onERC721Received(
-        address operator,
-        address from,
-        uint256 tokenId,
-        bytes calldata data
-    ) public override returns (bytes4) {
-        require(isLoan(operator));
-        uint256 principal = abi.decode(data, (uint256));
-        _lentTo[operator] -= principal;
-        return super.onERC721Received(operator, from, tokenId, data);
     }
 }

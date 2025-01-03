@@ -2,8 +2,12 @@
 pragma solidity ^0.8.20;
 
 import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
-import {IERC721} from "@openzeppelin/contracts/interfaces/IERC721.sol";
+import {ERC721Burnable} from "@openzeppelin/contracts/token/ERC721/extensions/ERC721Burnable.sol";
 import {PaymentLib} from "../utils/PaymentLib.sol";
+
+import {IERC721CollateralLoanEvents} from "./IERC721CollateralLoan.events.sol";
+import {IERC721CollateralLoanErrors} from "./IERC721CollateralLoan.errors.sol";
+import {LoanState} from "./IERC721CollateralLoan.types.sol";
 
 /// @title ERC721 Collateral Loan Interface
 ///
@@ -26,87 +30,15 @@ import {PaymentLib} from "../utils/PaymentLib.sol";
 ///     DEFAULTED --> FUNDED: calling repayN(...)
 ///     DEFAULTED --> PAID: calling repayN(...)
 /// ```
-interface IERC721CollateralLoan {
-    /// @dev Emitted when a payment is created.
-    event CreatedPayment(
-        uint256 indexed index,
-        uint256 indexed tokenId,
-        PaymentLib.Payment payment
-    );
-
-    /// @dev Emitted when a payment is
-    event FundedPayment(
-        uint256 indexed index,
-        uint256 indexed tokenId,
-        uint256 principal
-    );
-
-    /// @dev Emitted when the collateral is withdrawn by the beneficiary.
-    event WithdrawnPayment(
-        uint256 indexed index,
-        uint256 indexed tokenId,
-        uint256 principal
-    );
-
-    /// @dev Emitted when a loan payment is repaid.
-    event RepaidPayment(
-        uint256 indexed index,
-        uint256 indexed tokenId,
-        uint256 principal,
-        uint256 interest,
-        uint256 premiumInterest
-    );
-
-    /// @dev Emitted when a loan payment is repossessed by the liquidity provider.
-    event RepossessedPayment(
-        uint256 indexed index,
-        uint256 indexed tokenId,
-        uint256 principal
-    );
-
-    /// @dev The possible states of a loan.
-    enum LoanState {
-        CREATED,
-        CANCELED,
-        FUNDED,
-        DEFAULTED,
-        REPOSSESSED,
-        PAID
-    }
-
-    /// @dev The payment is already matured so it can't be added to the loan.
-    error PaymentMatured(uint256 tokenId);
-
-    /// @dev The payment is already defaulted so it can't be added to the loan.
-    error DuplicatedCollateral(uint256 tokenId);
-
-    /// @dev The payment is already defaulted so it can't be added to the loan.
-    error UnorderedPayments();
-
-    /// @dev Only the liquidity provider can perform the operation.
-    error OnlyLiquidityProvider();
-
-    /// @dev Only the beneficiary can perform the operation.
-    error OnlyBeneficiary();
-
-    /// @dev The beneficiary address is not valid.
-    error InvalidBeneficiary();
-
-    /// @dev The payments array doesn't match the collateral tokenIds array.
-    error MismatchedPaymentCollateralIds();
-
-    /// @dev The current state of the loan is not the required for performing an operation.
-    /// The `expectedStates` is a bitmap with the bits enabled for each LoanState enum position
-    /// counting from right to left.
-    ///
-    /// NOTE: If `expectedState` is `bytes32(0)`, any state is expected.
-    error UnexpectedLoanState(LoanState current, bytes32 expectedStates);
-
+interface IERC721CollateralLoan is
+    IERC721CollateralLoanEvents,
+    IERC721CollateralLoanErrors
+{
     /// @dev Address of the ERC20 token lent.
     function lendingAsset() external view returns (IERC20);
 
     /// @dev Address of the ERC721 token used as collateral.
-    function collateralAsset() external view returns (IERC721);
+    function collateralAsset() external view returns (ERC721Burnable);
 
     /// @dev Address of the liquidity provider funding the loan.
     function liquidityProvider() external view returns (address);

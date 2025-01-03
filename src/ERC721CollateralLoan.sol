@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24;
+pragma solidity ^0.8.20;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
@@ -17,39 +17,40 @@ import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/U
 
 import {PaymentLib} from "./utils/PaymentLib.sol";
 import {IERC721CollateralLoan} from "./interfaces/IERC721CollateralLoan.sol";
+import {ERC721CollateralLoanView} from "./ERC721CollateralLoan.view.sol";
+import {ERC721CollateralLoanStorage} from "./ERC721CollateralLoan.storage.sol";
+import {LoanState} from "./interfaces/IERC721CollateralLoan.types.sol";
 
 contract ERC721CollateralLoan is
     Initializable,
     UUPSUpgradeable,
     AccessManagedUpgradeable,
-    IERC721CollateralLoan
+    ERC721CollateralLoanView
 {
     using SafeERC20 for IERC20;
     using EnumerableSet for EnumerableSet.UintSet;
     using PaymentLib for PaymentLib.Payment;
 
-    // keccak256(abi.encode(uint256(keccak256("PlumaaID.storage.ERC721CollateralLoan")) - 1)) & ~bytes32(uint256(0xff))
-    bytes32 private constant ERC721_COLLATERAl_LOAN_STORAGE =
-        0xd3b6f225e977966761f1657a7744205f224d1c596f9144ffc3e50665071a9800;
-
-    struct LoanStorage {
-        IERC4626 liquidityProvider;
-        ERC721Burnable collateralAsset;
-        PaymentLib.Payment[] payments;
-        uint256[] collateralTokenIds;
-        EnumerableSet.UintSet heldTokenIds;
-        address beneficiary;
-        uint16 defaultThreshold; // Up to 65535 payments
-        uint16 currentPaymentIndex; // Up to 65535 payments
-        uint16 currentFundingIndex; // Up to 65535 payments
-        bool _canceled;
-        bool _repossessed;
-    }
-
+    /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
     }
 
+    /// @dev Initializes the loan with the provided parameters.
+    ///
+    /// @param authority_ The access manager for the loan. Can upgrade.
+    /// @param liquidityProvider_ The address funding the loan.
+    /// @param collateralAsset_ The ERC721 token used as collateral.
+    /// @param beneficiary_ The address to receive the principal once funded.
+    /// @param defaultThreshold_ The number of missed payments at which the loan defaults.
+    /// @param payments_ The list of payments to be added to the loan.
+    /// @param collateralTokenIds_ The list of collateral tokenIds to be added to the loan.
+    ///
+    /// Requirements:
+    ///
+    /// - The beneficiary MUST NOT be the liquidity provider or the zero address.
+    ///
+    /// See `_validatePaymentsAndCollectCollateral` for more details on the requirements.
     function initialize(
         address authority_,
         address liquidityProvider_,
@@ -61,100 +62,13 @@ contract ERC721CollateralLoan is
     ) public initializer {
         __AccessManaged_init(authority_);
         LoanStorage storage $ = getERC721CollateralLoanStorage();
-        if (beneficiary_ == address(0) || beneficiary_ != liquidityProvider_)
+        if (beneficiary_ == address(0) || beneficiary_ == liquidityProvider_)
             revert InvalidBeneficiary();
         $.liquidityProvider = IERC4626(liquidityProvider_);
         $.collateralAsset = ERC721Burnable(collateralAsset_);
         $.beneficiary = beneficiary_;
         $.defaultThreshold = defaultThreshold_;
         _validatePaymentsAndCollectCollateral(collateralTokenIds_, payments_);
-    }
-
-    /**********************/
-    /*** View Functions ***/
-    /**********************/
-
-    /// @dev Address of the ERC20 token lent.
-    function lendingAsset() public view returns (IERC20) {
-        return IERC20(IERC4626(liquidityProvider()).asset());
-    }
-
-    /// @dev Address of the ERC721 token used as collateral.
-    function collateralAsset() public view returns (ERC721Burnable) {
-        return getERC721CollateralLoanStorage().collateralAsset;
-    }
-
-    /// @dev Address of the liquidity provider funding the loan.
-    function liquidityProvider() public view returns (address) {
-        return address(getERC721CollateralLoanStorage().liquidityProvider);
-    }
-
-    /// @dev Get payment details.
-    function payment(
-        uint256 index
-    )
-        public
-        view
-        returns (uint256 collateralTokenId, PaymentLib.Payment memory)
-    {
-        LoanStorage storage $ = getERC721CollateralLoanStorage();
-        return ($.collateralTokenIds[index], $.payments[index]);
-    }
-
-    /// @dev Get the index of the current payment yet to be repaid.
-    function currentPaymentIndex() public view returns (uint256) {
-        return getERC721CollateralLoanStorage().currentPaymentIndex;
-    }
-
-    /// @dev Get the index of the current payment yet to be funded.
-    function currentFundingIndex() public view returns (uint256) {
-        return getERC721CollateralLoanStorage().currentFundingIndex;
-    }
-
-    /// @dev Get the payment at which the loan is currently at and its collateral tokenId.
-    function currentPayment()
-        public
-        view
-        returns (uint256 collateralTokenId, PaymentLib.Payment memory)
-    {
-        return payment(currentPaymentIndex());
-    }
-
-    /// @dev Get the total number of payments.
-    function totalPayments() public view returns (uint256) {
-        return getERC721CollateralLoanStorage().payments.length;
-    }
-
-    /// @dev Address of the beneficiary of the loan.
-    function beneficiary() public view returns (address) {
-        return getERC721CollateralLoanStorage().beneficiary;
-    }
-
-    /// @dev Amount of missed payments at which the loan is defaulted.
-    function defaultThreshold() public view returns (uint256) {
-        return getERC721CollateralLoanStorage().defaultThreshold;
-    }
-
-    /// @dev Get the current state of the loan.
-    function state() public view returns (LoanState) {
-        LoanStorage storage $ = getERC721CollateralLoanStorage();
-
-        if ($._repossessed) return LoanState.REPOSSESSED;
-        uint256 current = currentPaymentIndex();
-        if (current == totalPayments()) return LoanState.PAID;
-        if ($._canceled) return LoanState.CANCELED;
-
-        uint256 threshold = defaultThreshold();
-
-        // If any of the following payments until the threshold is not matured, the loan is not defaulted
-        for (uint256 i = current; i < current + threshold; i++) {
-            (, PaymentLib.Payment memory payment_) = payment(i);
-            if (!payment_.matured()) break;
-            return LoanState.DEFAULTED;
-        }
-
-        if (currentFundingIndex() == totalPayments()) return LoanState.FUNDED;
-        return LoanState.CREATED;
     }
 
     /**************************/
@@ -278,10 +192,12 @@ contract ERC721CollateralLoan is
         );
 
         // Effects
-        uint256 toPay = _preRepayN(n);
+        uint256 start = currentPaymentIndex();
+        uint256 end = Math.min(start + 1 + n, totalPayments());
+        uint256 toPay = _prepareToPay(start, end);
 
         // Interactions
-        _repayN(n, collateralReceiver, toPay);
+        _repay(start, end, collateralReceiver, toPay);
     }
 
     /// @dev Repossess the collateral from payments.
@@ -340,13 +256,13 @@ contract ERC721CollateralLoan is
         if (collateralTokenIds_.length != payments_.length)
             revert MismatchedPaymentCollateralIds();
 
-        LoanStorage storage $ = getERC721CollateralLoanStorage();
         (, PaymentLib.Payment memory latest) = payment(totalPayments() - 1);
         uint256 latestMaturity = latest.maturedAt();
 
         // Checks and Effects
         for (uint256 i = 0; i < payments_.length; i++)
             latestMaturity = _validatePayment(
+                i,
                 latestMaturity,
                 collateralTokenIds_[i],
                 payments_[i]
@@ -355,7 +271,7 @@ contract ERC721CollateralLoan is
         // Interactions
         ERC721Burnable asset = collateralAsset();
         for (uint256 i = 0; i < payments_.length; i++)
-            _collectCollateral(collateralTokenIds_[i]);
+            _collectCollateral(asset, collateralTokenIds_[i]);
     }
 
     /// @dev Validates the payment and adds it to the loan.
@@ -367,23 +283,25 @@ contract ERC721CollateralLoan is
     /// - The collateral tokenId MUST not have been added before.
     /// - Emits a `CreatedPayment` event.
     function _validatePayment(
+        uint256 i,
         uint256 latestMaturity,
         uint256 collateralTokenId,
-        PaymentLib.Payment calldata payments
+        PaymentLib.Payment calldata payment_
     ) internal returns (uint256) {
         // Checks
         uint256 maturedAt = payment_.maturedAt();
         if (maturedAt < latestMaturity) revert UnorderedPayments();
         if (
             payment_.matured() /* || payment_.defaulted() */ // Default is strictly higher or equal to maturity
-        ) revert PaymentMatured(tokenId);
+        ) revert PaymentMatured(collateralTokenId);
 
         // Effects
-        if (!$.heldTokenIds.add(tokenId))
+        LoanStorage storage $ = getERC721CollateralLoanStorage();
+        if (!$.heldTokenIds.add(collateralTokenId))
             // Intentionally last check since it's also a side effect
-            revert DuplicatedCollateral(tokenId);
+            revert DuplicatedCollateral(collateralTokenId);
         $.payments.push(payment_);
-        emit CreatedPayment(i, tokenId, payment_);
+        emit CreatedPayment(i, collateralTokenId, payment_);
         return maturedAt;
     }
 
@@ -394,7 +312,10 @@ contract ERC721CollateralLoan is
     /// - The collateralTokenIds MUST exist.
     /// - The owner of each collateral tokenId MUST have approved this contract
     ///   to transfer it (if not the contract itself).
-    function _collectCollateral(uint256 tokenId) internal {
+    function _collectCollateral(
+        ERC721Burnable asset,
+        uint256 tokenId
+    ) internal {
         // Reverts if tokenId doesn't exist
         address assetOwner = asset.ownerOf(tokenId);
         if (assetOwner != address(this)) {
@@ -429,6 +350,8 @@ contract ERC721CollateralLoan is
             totalPrincipal += payment_.principal;
             emit FundedPayment(i, collateralTokenId, payment_.principal);
         }
+
+        return totalPrincipal;
     }
 
     /// @dev Withdraws the collateral to the beneficiary.
@@ -455,7 +378,7 @@ contract ERC721CollateralLoan is
         }
     }
 
-    /// @dev Prepares the loan for repayment of `n` payments. Returns the total principal to be repaid.
+    /// @dev Prepares the loan for repayment of `n` payments. Returns the total amount to pay.
     ///
     /// Effects:
     ///
@@ -463,11 +386,10 @@ contract ERC721CollateralLoan is
     /// - Moves to PAID state if all payments are repaid.
     /// - The `currentPaymentIndex` is incremented by `n` or the remaining payments.
     /// - Emits a `RepaidPayment` event for each payment repaid.
-    function _preRepayN(uint256 n) internal returns (uint256) {
-        uint256 start = currentPaymentIndex();
-        uint256 totalPayments_ = totalPayments();
-        uint256 end = Math.min(start + 1 + n, totalPayments_);
-
+    function _prepareToPay(
+        uint256 start,
+        uint256 end
+    ) internal returns (uint256) {
         LoanStorage storage $ = getERC721CollateralLoanStorage();
         $.currentPaymentIndex = SafeCast.toUint16(end);
 
@@ -502,8 +424,9 @@ contract ERC721CollateralLoan is
     ///
     /// - The principal of the repaid payments is transferred from the beneficiary to the liquidity provider.
     /// - The collateral is transferred to the collateralReceiver if provided, otherwise it is burned.
-    function _repayN(
-        uint256 n,
+    function _repay(
+        uint256 start,
+        uint256 end,
         address collateralReceiver,
         uint256 toPay
     ) internal {
@@ -590,6 +513,8 @@ contract ERC721CollateralLoan is
         return bytes32(1 << uint8(loanState));
     }
 
+    /// @dev Transfer the collateral tokenId to the recipient and
+    /// includes the encoded principal as data.
     function _transferCollateral(
         uint256 tokenId,
         address to,
@@ -599,24 +524,7 @@ contract ERC721CollateralLoan is
             address(this),
             to,
             tokenId,
-            _encodeCollateralData(principal)
+            abi.encode(principal)
         );
-    }
-
-    function _encodeCollateralData(
-        uint256 paidPrincipal
-    ) private pure returns (bytes memory) {
-        return abi.encode(paidPrincipal);
-    }
-
-    /// @notice Get EIP-7201 storage
-    function getERC721CollateralLoanStorage()
-        private
-        pure
-        returns (LoanStorage storage $)
-    {
-        assembly ("memory-safe") {
-            $.slot := ERC721_COLLATERAl_LOAN_STORAGE
-        }
     }
 }
