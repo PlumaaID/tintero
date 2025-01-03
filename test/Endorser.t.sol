@@ -8,8 +8,6 @@ import {IWitness, Proof} from "@WitnessCo/interfaces/IWitness.sol";
 import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 import {Endorser} from "~/Endorser.sol";
 
-import {console2} from "forge-std/console2.sol";
-
 contract EndorserTest is BaseTest {
     bytes32 internal constant _MINT_AUTHORIZATION_TYPEHASH =
         keccak256("MintRequest(bytes32 leaf,address to)");
@@ -79,15 +77,14 @@ contract EndorserTest is BaseTest {
     }
 
     function testSetWitness(IWitness newWitness, address setter) public {
-        uint64 roleId = uint64(bytes8(keccak256("PlumaaID.WITNESS_SETTER")));
         bytes4[] memory selectors = new bytes4[](1);
         selectors[0] = Endorser.setWitness.selector;
         accessManager.setTargetFunctionRole(
             address(endorser),
             selectors,
-            roleId
+            WITNESS_SETTER_ROLE
         );
-        accessManager.grantRole(roleId, setter, 0);
+        accessManager.grantRole(WITNESS_SETTER_ROLE, setter, 0);
         vm.prank(setter);
         endorser.setWitness(newWitness);
         assertEq(address(endorser.WITNESS()), address(newWitness));

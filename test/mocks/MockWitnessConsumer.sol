@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BUSL-1.1
+// Vendored and modified from https://github.com/WitnessCo/contracts-core/blob/main/test/MockWitnessConsumer.sol
 pragma solidity ^0.8.20;
 
 import {IWitness, Proof} from "@WitnessCo/interfaces/IWitness.sol";

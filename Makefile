@@ -17,7 +17,7 @@ update:; forge update
 
 build:; forge build
 
-test: clean; forge test 
+test: clean; forge test --fork-url arbitrum
 
 snapshot: clean; forge snapshot
 
