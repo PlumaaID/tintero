@@ -16,16 +16,16 @@ import {AccessManagedUpgradeable} from "@openzeppelin/contracts-upgradeable/acce
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
 import {PaymentLib} from "./utils/PaymentLib.sol";
-import {IERC721CollateralLoan} from "./interfaces/IERC721CollateralLoan.sol";
-import {ERC721CollateralLoanView} from "./ERC721CollateralLoan.view.sol";
-import {ERC721CollateralLoanStorage} from "./ERC721CollateralLoan.storage.sol";
-import {LoanState} from "./interfaces/IERC721CollateralLoan.types.sol";
+import {ITinteroLoan} from "./interfaces/ITinteroLoan.sol";
+import {TinteroLoanView} from "./TinteroLoan.view.sol";
+import {TinteroLoanStorage} from "./TinteroLoan.storage.sol";
+import {LoanState} from "./interfaces/ITinteroLoan.types.sol";
 
-contract ERC721CollateralLoan is
+contract TinteroLoan is
     Initializable,
     UUPSUpgradeable,
     AccessManagedUpgradeable,
-    ERC721CollateralLoanView
+    TinteroLoanView
 {
     using SafeERC20 for IERC20;
     using EnumerableSet for EnumerableSet.UintSet;
@@ -61,7 +61,7 @@ contract ERC721CollateralLoan is
         uint256[] calldata collateralTokenIds_
     ) public initializer {
         __AccessManaged_init(authority_);
-        LoanStorage storage $ = getERC721CollateralLoanStorage();
+        LoanStorage storage $ = getTinteroLoanStorage();
         if (beneficiary_ == address(0) || beneficiary_ == liquidityProvider_)
             revert InvalidBeneficiary();
         $.liquidityProvider = IERC4626(liquidityProvider_);
@@ -296,7 +296,7 @@ contract ERC721CollateralLoan is
         ) revert PaymentMatured(collateralTokenId);
 
         // Effects
-        LoanStorage storage $ = getERC721CollateralLoanStorage();
+        LoanStorage storage $ = getTinteroLoanStorage();
         if (!$.heldTokenIds.add(collateralTokenId))
             // Intentionally last check since it's also a side effect
             revert DuplicatedCollateral(collateralTokenId);
@@ -338,7 +338,7 @@ contract ERC721CollateralLoan is
         uint256 totalPayments_ = totalPayments();
         uint256 end = Math.min(start + n, totalPayments_);
 
-        LoanStorage storage $ = getERC721CollateralLoanStorage();
+        LoanStorage storage $ = getTinteroLoanStorage();
         $.currentFundingIndex = SafeCast.toUint16(end);
 
         uint256 totalPrincipal = 0;
@@ -368,7 +368,7 @@ contract ERC721CollateralLoan is
     ) internal {
         // Cancels the loan so it can't be funded anymore.
         if (state_ == LoanState.CREATED)
-            getERC721CollateralLoanStorage()._canceled = true;
+            getTinteroLoanStorage()._canceled = true;
 
         // Interactions
         for (uint256 i = start; i < end; i++) {
@@ -390,7 +390,7 @@ contract ERC721CollateralLoan is
         uint256 start,
         uint256 end
     ) internal returns (uint256) {
-        LoanStorage storage $ = getERC721CollateralLoanStorage();
+        LoanStorage storage $ = getTinteroLoanStorage();
         $.currentPaymentIndex = SafeCast.toUint16(end);
 
         uint256 toPay = 0;
@@ -465,7 +465,7 @@ contract ERC721CollateralLoan is
     function _repossess(LoanState state_, uint256 start, uint256 end) internal {
         // Repossess so it can't be paid anymore.
         if (state_ == LoanState.DEFAULTED)
-            getERC721CollateralLoanStorage()._repossessed = true;
+            getTinteroLoanStorage()._repossessed = true;
 
         for (uint256 i = start; i < end; i++) {
             (uint256 tokenId, PaymentLib.Payment memory payment_) = payment(i);

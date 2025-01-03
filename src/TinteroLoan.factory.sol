@@ -6,13 +6,13 @@ import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.s
 import {AccessManaged} from "@openzeppelin/contracts/access/manager/AccessManaged.sol";
 
 import {PaymentLib} from "./utils/PaymentLib.sol";
-import {ERC721CollateralLoan} from "./ERC721CollateralLoan.sol";
+import {TinteroLoan} from "./TinteroLoan.sol";
 
-abstract contract ERC721CollateralLoanFactory is AccessManaged {
+abstract contract TinteroLoanFactory is AccessManaged {
     using Create2 for *;
 
     address public immutable INITIAL_ERC721_COLLATERAL_LOAN_IMPLEMENTATION =
-        address(new ERC721CollateralLoan());
+        address(new TinteroLoan());
 
     /// @dev Predict the address of a Loan contract using the provided parameters.
     function predictLoanAddress(
@@ -80,7 +80,7 @@ abstract contract ERC721CollateralLoanFactory is AccessManaged {
                 type(ERC1967Proxy).creationCode,
                 INITIAL_ERC721_COLLATERAL_LOAN_IMPLEMENTATION,
                 abi.encodeCall(
-                    ERC721CollateralLoan.initialize,
+                    TinteroLoan.initialize,
                     (
                         authority(),
                         address(this),

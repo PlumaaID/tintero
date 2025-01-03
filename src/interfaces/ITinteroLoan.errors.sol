@@ -2,10 +2,10 @@
 pragma solidity ^0.8.20;
 
 import {PaymentLib} from "../utils/PaymentLib.sol";
-import {LoanState} from "./IERC721CollateralLoan.types.sol";
+import {LoanState} from "./ITinteroLoan.types.sol";
 
 /// @dev Errors for the ERC721 Collateral Loan.
-interface IERC721CollateralLoanErrors {
+interface ITinteroLoanErrors {
     /// @dev The payment is already matured so it can't be added to the loan.
     error PaymentMatured(uint256 tokenId);
 

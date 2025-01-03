@@ -6,10 +6,10 @@ import {ERC721Burnable} from "@openzeppelin/contracts/token/ERC721/extensions/ER
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 
 import {PaymentLib} from "./utils/PaymentLib.sol";
-import {IERC721CollateralLoan} from "./interfaces/IERC721CollateralLoan.sol";
+import {ITinteroLoan} from "./interfaces/ITinteroLoan.sol";
 
-abstract contract ERC721CollateralLoanStorage is IERC721CollateralLoan {
-    // keccak256(abi.encode(uint256(keccak256("PlumaaID.storage.ERC721CollateralLoan")) - 1)) & ~bytes32(uint256(0xff))
+abstract contract TinteroLoanStorage is ITinteroLoan {
+    // keccak256(abi.encode(uint256(keccak256("PlumaaID.storage.TinteroLoan")) - 1)) & ~bytes32(uint256(0xff))
     bytes32 private constant ERC721_COLLATERAl_LOAN_STORAGE =
         0xd3b6f225e977966761f1657a7744205f224d1c596f9144ffc3e50665071a9800;
 
@@ -28,7 +28,7 @@ abstract contract ERC721CollateralLoanStorage is IERC721CollateralLoan {
     }
 
     /// @notice Get EIP-7201 storage
-    function getERC721CollateralLoanStorage()
+    function getTinteroLoanStorage()
         internal
         pure
         returns (LoanStorage storage $)

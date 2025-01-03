@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import {PaymentLib} from "../utils/PaymentLib.sol";
 
-interface IERC721CollateralLoanEvents {
+interface ITinteroLoanEvents {
     /// @dev Emitted when a payment is created.
     event CreatedPayment(
         uint256 indexed index,

@@ -5,9 +5,9 @@ import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
 import {ERC721Burnable} from "@openzeppelin/contracts/token/ERC721/extensions/ERC721Burnable.sol";
 import {PaymentLib} from "../utils/PaymentLib.sol";
 
-import {IERC721CollateralLoanEvents} from "./IERC721CollateralLoan.events.sol";
-import {IERC721CollateralLoanErrors} from "./IERC721CollateralLoan.errors.sol";
-import {LoanState} from "./IERC721CollateralLoan.types.sol";
+import {ITinteroLoanEvents} from "./ITinteroLoan.events.sol";
+import {ITinteroLoanErrors} from "./ITinteroLoan.errors.sol";
+import {LoanState} from "./ITinteroLoan.types.sol";
 
 /// @title ERC721 Collateral Loan Interface
 ///
@@ -30,9 +30,9 @@ import {LoanState} from "./IERC721CollateralLoan.types.sol";
 ///     DEFAULTED --> FUNDED: calling repayN(...)
 ///     DEFAULTED --> PAID: calling repayN(...)
 /// ```
-interface IERC721CollateralLoan is
-    IERC721CollateralLoanEvents,
-    IERC721CollateralLoanErrors
+interface ITinteroLoan is
+    ITinteroLoanEvents,
+    ITinteroLoanErrors
 {
     /// @dev Address of the ERC20 token lent.
     function lendingAsset() external view returns (IERC20);

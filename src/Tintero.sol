@@ -11,14 +11,14 @@ import {ERC721Holder} from "@openzeppelin/contracts/token/ERC721/utils/ERC721Hol
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 
 import {PaymentLib} from "./utils/PaymentLib.sol";
-import {ERC721CollateralLoan} from "./ERC721CollateralLoan.sol";
-import {ERC721CollateralLoanFactory} from "./ERC721CollateralLoan.factory.sol";
+import {TinteroLoan} from "./TinteroLoan.sol";
+import {TinteroLoanFactory} from "./TinteroLoan.factory.sol";
 
 /// @title Tintero Vault
 ///
 /// @notice An [ERC4626](https://docs.openzeppelin.com/contracts/5.x/erc4626) vault that receives
 /// an ERC20 token in exchange for shares and allocates these assets towards funding Loan contracts.
-contract Tintero is ERC4626, ERC721Holder, ERC721CollateralLoanFactory {
+contract Tintero is ERC4626, ERC721Holder, TinteroLoanFactory {
     using EnumerableSet for EnumerableSet.AddressSet;
 
     event LoanCreated(address loan);
@@ -137,7 +137,7 @@ contract Tintero is ERC4626, ERC721Holder, ERC721CollateralLoanFactory {
     ///
     /// - The loan MUST be created by this vault.
     function pushPayments(
-        ERC721CollateralLoan loan,
+        TinteroLoan loan,
         uint256[] calldata collateralTokenIds,
         PaymentLib.Payment[] calldata payment_
     ) external restricted {
@@ -151,7 +151,7 @@ contract Tintero is ERC4626, ERC721Holder, ERC721CollateralLoanFactory {
     /// Requirements:
     ///
     /// - The loan MUST be created by this vault.
-    function fundN(ERC721CollateralLoan loan, uint256 n) external restricted {
+    function fundN(TinteroLoan loan, uint256 n) external restricted {
         address loan_ = address(loan);
         if (!isLoan(loan_)) revert OnlyAuthorizedLoan();
 
@@ -170,7 +170,7 @@ contract Tintero is ERC4626, ERC721Holder, ERC721CollateralLoanFactory {
     ///
     /// - The loan MUST be created by this vault.
     function repossess(
-        ERC721CollateralLoan loan,
+        TinteroLoan loan,
         uint256 start,
         uint256 end
     ) external restricted {
