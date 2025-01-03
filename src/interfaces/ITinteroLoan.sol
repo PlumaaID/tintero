@@ -115,6 +115,7 @@ interface ITinteroLoan is ITinteroLoanEvents, ITinteroLoanErrors {
     ///
     /// Effects:
     ///
+    /// - Moves to FUNDING state
     /// - Moves to FUNDED state if all payments are funded.
     /// - The `currentFundingIndex` is incremented by `n` or the remaining payments.
     /// - The principal of the funded payments is transferred from the liquidity provider to the beneficiary.
