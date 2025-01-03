@@ -449,11 +449,7 @@ contract TinteroLoan is
             // No need to update heldTokenIds since they can't be transferred back anymore
         }
 
-        lendingAsset().safeTransferFrom(
-            beneficiary(),
-            liquidityProvider(),
-            toPay
-        );
+        lendingAsset().safeTransferFrom(msg.sender, liquidityProvider(), toPay);
     }
 
     /// @dev Repossess the collateral from payments.
