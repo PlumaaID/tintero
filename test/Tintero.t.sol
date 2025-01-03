@@ -9,4 +9,8 @@ contract TinteroTest is BaseTest {
     function testAsset() public view {
         assertEq(address(tintero.asset()), address(usdc));
     }
+
+    function testAuthority() public view {
+        assertEq(tintero.authority(), address(accessManager));
+    }
 }
