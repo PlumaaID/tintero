@@ -21,8 +21,6 @@ import {TinteroLoanFactory} from "./TinteroLoan.factory.sol";
 contract Tintero is ERC4626, ERC721Holder, TinteroLoanFactory {
     using EnumerableSet for EnumerableSet.AddressSet;
 
-    event LoanCreated(address loan);
-
     /// @dev Reverts if a Loan contract is already created by this vault.
     error DuplicatedLoan();
 
