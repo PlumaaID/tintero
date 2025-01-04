@@ -26,6 +26,7 @@ library PaymentLib {
         uint32 gracePeriod; // Up to ~136 years
         uint32 interestRate; // Up to ~4294% annualized
         uint32 premiumRate; // Up to ~4294% annualized
+        // 80 bits gap
     }
 
     /// @dev Whether the principal is due.

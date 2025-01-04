@@ -10,6 +10,7 @@ import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {Time} from "@openzeppelin/contracts/utils/types/Time.sol";
+import {Checkpoints} from "@openzeppelin/contracts/utils/structs/Checkpoints.sol";
 
 import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import {AccessManagedUpgradeable} from "@openzeppelin/contracts-upgradeable/access/manager/AccessManagedUpgradeable.sol";
@@ -30,6 +31,8 @@ contract TinteroLoan is
     using SafeERC20 for IERC20;
     using EnumerableSet for EnumerableSet.UintSet;
     using PaymentLib for PaymentLib.Payment;
+    using Checkpoints for Checkpoints.Trace160;
+    using SafeCast for uint256;
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -50,7 +53,7 @@ contract TinteroLoan is
     ///
     /// - The beneficiary MUST NOT be the liquidity provider or the zero address.
     ///
-    /// See `_validatePaymentsAndCollectCollateral` for more details on the requirements.
+    /// See `_validatePushPaymentsAndCollectCollateral` for more details on the requirements.
     function initialize(
         address authority_,
         address liquidityProvider_,
@@ -68,7 +71,10 @@ contract TinteroLoan is
         $.collateralAsset = ERC721Burnable(collateralAsset_);
         $.beneficiary = beneficiary_;
         $.defaultThreshold = defaultThreshold_;
-        _validatePaymentsAndCollectCollateral(collateralTokenIds_, payments_);
+        _validatePushPaymentsAndCollectCollateral(
+            collateralTokenIds_,
+            payments_
+        );
     }
 
     /**************************/
@@ -102,7 +108,32 @@ contract TinteroLoan is
     ) external {
         if (msg.sender != liquidityProvider()) revert OnlyLiquidityProvider();
         _validateStateBitmap(_encodeStateBitmap(LoanState.CREATED));
-        _validatePaymentsAndCollectCollateral(collateralTokenIds, payment_);
+        _validatePushPaymentsAndCollectCollateral(collateralTokenIds, payment_);
+    }
+
+    /// @dev Adds a list of tranches to the loan.
+    ///
+    /// Requirements:
+    ///
+    /// - The caller MUST be the liquidity provider.
+    /// - The loan MUST be in CREATED state.
+    /// - The paymentIndexes and recipients arrays MUST have the same length.
+    /// - The tranche indexes MUST be strictly increasing.
+    /// - The total number of tranches MUST be less than the total number of payments.
+    ///
+    /// Effects:
+    ///
+    /// - The `totalTranches` is incremented by the length of the tranches array.
+    /// - The `tranche` function will return the added tranches at their corresponding
+    ///   indexes starting at `totalTranches`.
+    /// - The tranches are added to the loan.
+    function pushTranches(
+        uint96[] calldata paymentIndexes,
+        address[] calldata recipients
+    ) external {
+        if (msg.sender != liquidityProvider()) revert OnlyLiquidityProvider();
+        _validateStateBitmap(_encodeStateBitmap(LoanState.CREATED));
+        _validateAndPushTranches(paymentIndexes, recipients);
     }
 
     /// @dev Funds `n` payments from the loan.
@@ -110,6 +141,7 @@ contract TinteroLoan is
     /// Requirements:
     ///
     /// - The loan MUST be in CREATED or FUNDING state.
+    /// - There MUST be at least 1 tranche defined.
     /// - The liquidityProvider MUST have enough funds to repay the principal of the current payment
     /// - This contract mus have been approved to transfer the principal
     ///   amount from the liquidity provider.
@@ -123,6 +155,7 @@ contract TinteroLoan is
     /// - The principal of the funded payments is transferred from the liquidity provider to the beneficiary.
     function fundN(uint256 n) external returns (uint256) {
         // Checks
+        if (totalTranches() <= 0) revert EmptyTranches();
         _validateStateBitmap(
             _encodeStateBitmap(LoanState.CREATED) |
                 _encodeStateBitmap(LoanState.FUNDING)
@@ -177,15 +210,15 @@ contract TinteroLoan is
     /// Requirements:
     ///
     /// - The loan MUST be in FUNDED or DEFAULTED state.
-    /// - The beneficiary MUST have enough funds to repay the principal of the current payment
-    /// - The beneficiary MUST have approved this contract to transfer the principal amount
+    /// - The sender MUST have enough funds to repay the principal of the specified payments
+    /// - The sender MUST have approved this contract to transfer the principal amount
     ///
     /// Effects:
     ///
     /// - Moves to FUNDED if paid until below the default threshold.
     /// - Moves to PAID state if all payments are repaid.
     /// - The `currentPaymentIndex` is incremented by `n` or the remaining payments.
-    /// - The principal of the repaid payments is transferred from the beneficiary to the liquidity provider.
+    /// - The principal of the repaid payments is transferred from the sender to the receiver of each payment tranche
     /// - The collateral is transferred to the collateralReceiver if provided, otherwise it is burned.
     /// - Emits a `RepaidPayment` event for each payment repaid.
     function repayN(uint256 n, address collateralReceiver) public {
@@ -198,10 +231,9 @@ contract TinteroLoan is
         // Effects
         uint256 start = currentPaymentIndex();
         uint256 end = Math.min(start + 1 + n, totalPayments());
-        uint256 toPay = _prepareToPay(start, end);
 
         // Interactions
-        _repay(start, end, collateralReceiver, toPay);
+        _repay(start, end, collateralReceiver);
     }
 
     /// @dev Repossess the collateral from payments.
@@ -252,21 +284,24 @@ contract TinteroLoan is
     /// - The `payment` function will return the added payments at their corresponding
     ///   indexes starting at `totalPayments`.
     /// - Emits a `CreatedPayment` event for each payment added.
-    function _validatePaymentsAndCollectCollateral(
+    function _validatePushPaymentsAndCollectCollateral(
         uint256[] calldata collateralTokenIds_,
         PaymentLib.Payment[] calldata payments_
     ) internal {
+        uint256 paymentsLength = payments_.length;
         // Checks
-        if (collateralTokenIds_.length != payments_.length)
+        if (collateralTokenIds_.length != paymentsLength)
             revert MismatchedPaymentCollateralIds();
 
         (, PaymentLib.Payment memory latest) = payment(totalPayments() - 1);
+
+        uint256 totalPayments_ = totalPayments();
         uint256 latestMaturity = latest.maturedAt();
 
         // Checks and Effects
-        for (uint256 i = 0; i < payments_.length; i++)
-            latestMaturity = _validatePayment(
-                i,
+        for (uint256 i = 0; i < paymentsLength; i++)
+            latestMaturity = _validatePushPayment(
+                totalPayments_ + i,
                 latestMaturity,
                 collateralTokenIds_[i],
                 payments_[i]
@@ -278,6 +313,48 @@ contract TinteroLoan is
             _collectCollateral(asset, collateralTokenIds_[i]);
     }
 
+    /// @dev Validates the tranches and adds them to the loan.
+    ///
+    /// Requirements:
+    ///
+    /// - The paymentIndexes and recipients arrays MUST have the same length.
+    /// - The tranche indexes MUST be strictly increasing.
+    /// - The total number of tranches MUST be less than the total number of payments.
+    ///
+    /// Effects:
+    ///
+    /// - The `totalTranches` is incremented by the length of the tranches array.
+    /// - The `tranche` function will return the added tranches at their corresponding
+    ///   indexes starting at `totalTranches`.
+    /// - The tranches are added to the loan.
+    function _validateAndPushTranches(
+        uint96[] calldata paymentIndexes_,
+        address[] calldata recipients_
+    ) internal {
+        uint256 paymentIndexesLength = paymentIndexes_.length;
+        // Checks
+        if (paymentIndexesLength != recipients_.length)
+            revert MismatchedTranchePaymentIndexRecipient();
+
+        // Effects
+        LoanStorage storage $ = getTinteroLoanStorage();
+        uint256 totalTranches_ = totalTranches();
+        uint96 lastIndex = 1; // Avoids 0 index so that the first tranche is always valid
+        for (uint256 i = 0; i < paymentIndexesLength; i++) {
+            uint96 paymentIndex = paymentIndexes_[i];
+            if (paymentIndex <= lastIndex)
+                revert UnincreasingTranchePaymentIndex();
+            $._tranches.push(paymentIndex, uint160(recipients_[i]));
+            emit CreatedTranche(
+                totalTranches_ + i,
+                paymentIndex,
+                recipients_[i]
+            );
+        }
+
+        if (totalTranches() >= totalPayments()) revert TooManyTranches();
+    }
+
     /// @dev Validates the payment and adds it to the loan.
     ///
     /// Requirements:
@@ -286,7 +363,7 @@ contract TinteroLoan is
     /// - The payment MUST NOT have matured.
     /// - The collateral tokenId MUST not have been added before.
     /// - Emits a `CreatedPayment` event.
-    function _validatePayment(
+    function _validatePushPayment(
         uint256 i,
         uint256 latestMaturity,
         uint256 collateralTokenId,
@@ -344,7 +421,7 @@ contract TinteroLoan is
         uint256 end = Math.min(start + n, totalPayments_);
 
         LoanStorage storage $ = getTinteroLoanStorage();
-        $.currentFundingIndex = SafeCast.toUint16(end);
+        $.currentFundingIndex = end.toUint16();
 
         uint256 totalPrincipal = 0;
         for (uint256 i = start; i < end; i++) {
@@ -389,15 +466,11 @@ contract TinteroLoan is
     ///
     /// - Moves to FUNDED if paid until below the default threshold.
     /// - Moves to PAID state if all payments are repaid.
-    /// - The `currentPaymentIndex` is incremented by `n` or the remaining payments.
     /// - Emits a `RepaidPayment` event for each payment repaid.
     function _prepareToPay(
         uint256 start,
         uint256 end
     ) internal returns (uint256) {
-        LoanStorage storage $ = getTinteroLoanStorage();
-        $.currentPaymentIndex = SafeCast.toUint16(end);
-
         uint256 toPay = 0;
         for (uint256 i = start; i < end; i++) {
             (
@@ -422,34 +495,23 @@ contract TinteroLoan is
     ///
     /// Requirements:
     ///
-    /// - The beneficiary MUST have enough funds to repay the principal of the current payment
-    /// - The beneficiary MUST have approved this contract to transfer the principal amount
+    /// - The sender MUST have enough funds to repay the principal of the specified payments
+    /// - The sender MUST have approved this contract to transfer the principal amount
     ///
     /// Effects:
     ///
-    /// - The principal of the repaid payments is transferred from the beneficiary to the liquidity provider.
+    /// - The `currentPaymentIndex` is incremented by `n` or the remaining payments.
+    /// - The principal of the repaid payments is transferred from the sender to the receiver of each payment tranche
     /// - The collateral is transferred to the collateralReceiver if provided, otherwise it is burned.
     function _repay(
         uint256 start,
         uint256 end,
-        address collateralReceiver,
-        uint256 toPay
+        address collateralReceiver
     ) internal {
-        for (uint256 i = start; i < end; i++) {
-            (uint256 tokenId, PaymentLib.Payment memory payment_) = payment(i);
-            if (collateralReceiver == address(0))
-                collateralAsset().burn(tokenId);
-            else
-                _transferCollateral(
-                    tokenId,
-                    collateralReceiver,
-                    payment_.principal
-                );
-
-            // No need to update heldTokenIds since they can't be transferred back anymore
-        }
-
-        lendingAsset().safeTransferFrom(msg.sender, liquidityProvider(), toPay);
+        LoanStorage storage $ = getTinteroLoanStorage();
+        $.currentPaymentIndex = end.toUint16();
+        _repayByTranches(start, end);
+        _disposeCollateral(start, end, collateralReceiver);
     }
 
     /// @dev Repossess the collateral from payments.
@@ -504,14 +566,76 @@ contract TinteroLoan is
     ///
     /// 0x000...10000
     ///   ^^^^^^----- ...
-    ///         ^---- CREATED
-    ///          ^--- CANCELED
-    ///           ^-- FUNDED
-    ///            ^- DEFAULTED
+    ///         ^---- FUNDED
+    ///          ^--- DEFAULTED
+    ///           ^-- REPOSSESSED
+    ///            ^- PAID
     function _encodeStateBitmap(
         LoanState loanState
     ) private pure returns (bytes32) {
         return bytes32(1 << uint8(loanState));
+    }
+
+    /// @dev Repays the payments from `start` to `end` by doing a single transfer per tranche.
+    ///
+    /// Requirements:
+    ///
+    /// - The sender MUST have enough funds to repay the principal of the specified payments
+    /// - The sender MUST have approved this contract to transfer the principal amount
+    ///
+    /// Effects:
+    ///
+    /// - The principal of the repaid payments is transferred from the sender to the receiver of each payment tranche
+    function _repayByTranches(uint256 start, uint256 end) private {
+        uint256 trancheIndex_ = currentTrancheIndex();
+        (uint96 tranchePaymentIndex_, address trancheReceiver_) = tranche(
+            trancheIndex_
+        );
+
+        assert(tranchePaymentIndex_ >= start);
+
+        uint256 totalTranches_ = totalTranches();
+        uint96 nextTranchePaymentIndex_;
+        address nextTrancheReceiver_;
+
+        while (start < end) {
+            assert(tranchePaymentIndex_ < totalTranches_);
+            (nextTranchePaymentIndex_, nextTrancheReceiver_) = tranche(
+                ++trancheIndex_ // Next tranche
+            );
+            lendingAsset().safeTransferFrom(
+                msg.sender,
+                trancheReceiver_,
+                _prepareToPay(start, nextTranchePaymentIndex_)
+            );
+            start = nextTranchePaymentIndex_;
+            trancheReceiver_ = nextTrancheReceiver_;
+        }
+    }
+
+    /// @dev Disposes the collateral from payments. Burns the collateral if `collateralReceiver` is the zero address.
+    ///
+    /// Effects:
+    ///
+    /// - The collateral is transferred to the collateralReceiver if provided, otherwise it is burned.
+    function _disposeCollateral(
+        uint256 start,
+        uint256 end,
+        address collateralReceiver
+    ) private {
+        for (uint256 i = start; i < end; i++) {
+            (uint256 tokenId, PaymentLib.Payment memory payment_) = payment(i);
+            if (collateralReceiver == address(0))
+                collateralAsset().burn(tokenId);
+            else
+                _transferCollateral(
+                    tokenId,
+                    collateralReceiver,
+                    payment_.principal
+                );
+
+            // No need to update heldTokenIds since they can't be transferred back anymore
+        }
     }
 
     /// @dev Transfer the collateral tokenId to the recipient and

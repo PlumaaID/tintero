@@ -11,6 +11,13 @@ interface ITinteroLoanEvents {
         PaymentLib.Payment payment
     );
 
+    /// @dev Emitted when a tranche is created.
+    event CreatedTranche(
+        uint256 indexed index,
+        uint256 indexed paymentIndex,
+        address indexed receiver
+    );
+
     /// @dev Emitted when a payment is
     event FundedPayment(
         uint256 indexed index,

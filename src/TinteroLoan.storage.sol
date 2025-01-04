@@ -4,27 +4,33 @@ pragma solidity ^0.8.20;
 import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 import {ERC721Burnable} from "@openzeppelin/contracts/token/ERC721/extensions/ERC721Burnable.sol";
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
+import {Checkpoints} from "@openzeppelin/contracts/utils/structs/Checkpoints.sol";
 
 import {PaymentLib} from "./utils/PaymentLib.sol";
 import {ITinteroLoan} from "./interfaces/ITinteroLoan.sol";
 
 abstract contract TinteroLoanStorage is ITinteroLoan {
     // keccak256(abi.encode(uint256(keccak256("PlumaaID.storage.TinteroLoan")) - 1)) & ~bytes32(uint256(0xff))
-    bytes32 private constant ERC721_COLLATERAl_LOAN_STORAGE =
-        0xd3b6f225e977966761f1657a7744205f224d1c596f9144ffc3e50665071a9800;
+    bytes32 private constant TINTERO_LOAN_STORAGE =
+        0x1f389b2eba3c6a855b1e43cd4e972600e00166178892203933678c6474e96300;
 
     struct LoanStorage {
         IERC4626 liquidityProvider;
+        // Invariant: _tranches.length() <= payments.length - 1
+        Checkpoints.Trace160 _tranches; // paymentIndex << 160 | recipient
+        bool _canceled;
+        bool _repossessed;
+        // 94 bits gap
         ERC721Burnable collateralAsset;
+        // 96 bits gap
         PaymentLib.Payment[] payments;
         uint256[] collateralTokenIds;
         EnumerableSet.UintSet heldTokenIds;
         address beneficiary;
-        uint16 defaultThreshold; // Up to 65535 payments
-        uint16 currentPaymentIndex; // Up to 65535 payments
-        uint16 currentFundingIndex; // Up to 65535 payments
-        bool _canceled;
-        bool _repossessed;
+        uint24 defaultThreshold; // Up to 16,777,216 payments
+        uint24 currentPaymentIndex; // Up to 16,777,216 payments
+        uint24 currentFundingIndex; // Up to 16,777,216 payments
+        // 24 bits gap
     }
 
     /// @notice Get EIP-7201 storage
@@ -34,7 +40,7 @@ abstract contract TinteroLoanStorage is ITinteroLoan {
         returns (LoanStorage storage $)
     {
         assembly ("memory-safe") {
-            $.slot := ERC721_COLLATERAl_LOAN_STORAGE
+            $.slot := TINTERO_LOAN_STORAGE
         }
     }
 }

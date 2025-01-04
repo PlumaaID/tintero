@@ -4,6 +4,8 @@ pragma solidity ^0.8.20;
 import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
 import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 import {ERC721Burnable} from "@openzeppelin/contracts/token/ERC721/extensions/ERC721Burnable.sol";
+import {Checkpoints} from "@openzeppelin/contracts/utils/structs/Checkpoints.sol";
+import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
 import {PaymentLib} from "./utils/PaymentLib.sol";
 import {TinteroLoanStorage} from "./TinteroLoan.storage.sol";
@@ -11,6 +13,8 @@ import {LoanState} from "./interfaces/ITinteroLoan.types.sol";
 
 abstract contract TinteroLoanView is TinteroLoanStorage {
     using PaymentLib for PaymentLib.Payment;
+    using Checkpoints for Checkpoints.Trace160;
+    using SafeCast for uint256;
 
     /// @dev Address of the ERC20 token lent.
     function lendingAsset() public view returns (IERC20) {
@@ -27,7 +31,40 @@ abstract contract TinteroLoanView is TinteroLoanStorage {
         return address(getTinteroLoanStorage().liquidityProvider);
     }
 
-    /// @dev Get payment details.
+    /// @dev Get the index at which the tranche starts and its recipient.
+    /// A tranche is a collection of payments from [paymentIndex ?? 0, nextPaymentIndex)
+    function tranche(
+        uint256 trancheIndex
+    ) public view returns (uint96 paymentIndex, address recipient) {
+        Checkpoints.Checkpoint160 memory trace = getTinteroLoanStorage()
+            ._tranches
+            .at(trancheIndex.toUint32());
+        return (trace._key, address(trace._value));
+    }
+
+    /// @dev Get the index of the current tranche.
+    function currentTrancheIndex() public view returns (uint256) {
+        return
+            getTinteroLoanStorage()._tranches.upperLookup(
+                currentPaymentIndex().toUint96()
+            );
+    }
+
+    /// @dev Get the current tranche.
+    function currentTranche()
+        public
+        view
+        returns (uint96 paymentIndex, address recipient)
+    {
+        return tranche(currentTrancheIndex());
+    }
+
+    /// @dev Total tranches in the loan.
+    function totalTranches() public view returns (uint256) {
+        return getTinteroLoanStorage()._tranches.length();
+    }
+
+    /// @dev Get payment details. A Payment is a struct with a principal and interest terms.
     function payment(
         uint256 index
     )
@@ -44,11 +81,6 @@ abstract contract TinteroLoanView is TinteroLoanStorage {
         return getTinteroLoanStorage().currentPaymentIndex;
     }
 
-    /// @dev Get the index of the current payment yet to be funded.
-    function currentFundingIndex() public view returns (uint256) {
-        return getTinteroLoanStorage().currentFundingIndex;
-    }
-
     /// @dev Get the payment at which the loan is currently at and its collateral tokenId.
     function currentPayment()
         public
@@ -61,6 +93,20 @@ abstract contract TinteroLoanView is TinteroLoanStorage {
     /// @dev Get the total number of payments.
     function totalPayments() public view returns (uint256) {
         return getTinteroLoanStorage().payments.length;
+    }
+
+    /// @dev Get the index of the current payment yet to be funded.
+    function currentFundingIndex() public view returns (uint256) {
+        return getTinteroLoanStorage().currentFundingIndex;
+    }
+
+    /// dev Get the current payment yet to be funded.
+    function currentPaymentFunding()
+        public
+        view
+        returns (uint256 collateralTokenId, PaymentLib.Payment memory)
+    {
+        return payment(currentFundingIndex());
     }
 
     /// @dev Address of the beneficiary of the loan.
@@ -90,15 +136,19 @@ abstract contract TinteroLoanView is TinteroLoanStorage {
 
     function _defaulted(uint256 current) internal view returns (bool) {
         uint256 threshold = defaultThreshold();
-        uint256 defaultAfter = current + threshold;
+        uint256 defaultAt = current + threshold;
+        uint256 total = totalPayments();
 
+        if (defaultAt >= total) return false; // Cannot default if there are no more payments
+
+        uint256 last = total - 1;
         // If any of the following payments until the threshold is not matured, the loan is not defaulted
-        uint256 last = defaultAfter - 1;
-        for (uint256 i = current; i < defaultAfter; i++) {
+        for (uint256 i = current; i < defaultAt; i++) {
             (, PaymentLib.Payment memory payment_) = payment(i);
             if (!payment_.matured()) break;
             if (i == last) return true;
         }
+
         return false;
     }
 }
