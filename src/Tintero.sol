@@ -147,6 +147,20 @@ contract Tintero is ERC4626, ERC721Holder, TinteroLoanFactory {
         loan.pushPayments(collateralTokenIds, payment_);
     }
 
+    /// @dev Adds a list of tranches to a Loan contract. Calls Loan#pushTranches.
+    ///
+    /// Requirements:
+    ///
+    /// - The loan MUST be created by this vault.
+    function pushTranches(
+        uint96[] calldata paymentIndexes,
+        address[] calldata recipients
+    ) external restricted {
+        if (!isLoan(address(loan))) revert OnlyAuthorizedLoan();
+
+        loan.pushTranches(paymentIndexes, recipients);
+    }
+
     /// @dev Funds `n` payments from a Loan contract. Calls Loan#fundN.
     ///
     /// Requirements:
