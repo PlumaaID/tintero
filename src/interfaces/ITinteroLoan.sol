@@ -12,7 +12,8 @@ import {LoanState} from "./ITinteroLoan.types.sol";
 /// @title ERC721 Collateral Loan Interface
 ///
 /// @notice Interface for a loan contract that uses an ERC721 token as collateral.
-/// The loan is funded with an ERC20 token and structured in a series of payments.
+/// The loan is funded with an ERC20 token and structured in a series of payments and
+/// tranches.
 ///
 /// ```mermaid
 /// stateDiagram-v2

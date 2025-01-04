@@ -17,7 +17,44 @@ import {TinteroLoanFactory} from "./TinteroLoan.factory.sol";
 /// @title Tintero Vault
 ///
 /// @notice An [ERC4626](https://docs.openzeppelin.com/contracts/5.x/erc4626) vault that receives
-/// an ERC20 token in exchange for shares and allocates these assets towards funding Loan contracts.
+/// an ERC20 token in exchange for shares and allocates these assets towards funding Loan contracts
+/// collateralized by tokenized ERC721 obligations.
+///
+/// The contract keeps track of the total assets in management by suming the total assets lent to
+/// Loan contracts and the total assets held by the vault, allowing owners to withdraw their assets
+/// at any time unless the vault does not have enough assets to cover the withdrawal (i.e. everything is
+/// lent out).
+///
+/// == Concepts
+///
+/// - **Shares**: The vault's shares represent the ownership of the vault's assets. They can be
+///   redeemed for the underlying assets if the vault has enough liquidity. They appreciate in value
+///   as the vault's assets grow when Loan contracts are paid back.
+/// - **Assets**: The vault's assets are the ERC20 tokens lent to Loan contracts. They are used to
+///   fund Loan contracts and are returned to the vault plus interests when the Loan contracts are
+///   paid back.
+/// - **Loans**: Loan contracts are created by the vault and have a list of ERC721-backed payments.
+/// - **Tranches**: A tranche is a collection of Loan payments from whose payments are sent to a tranche
+///   recipient.
+/// - **Payments**: A payment has a principal amount in ERC20 tokens that is due at the end of the maturity
+///   period and defaults after the grace period. Each one is backed by an ERC721 token.
+///
+/// == Requesting a Loan
+///
+/// Any user can permissionlessly request a Loan by calling `requestLoan`. The Loan contract is created
+/// by the vault and the Loan contract address is added to the vault's list of authorized Loans. Must
+/// be funded by the vault by calling `fundN`.
+///
+/// == Vault Management
+///
+/// The vault is managed by an access manager instance that controls the permissions of critical
+/// vault's functions. These functions include:
+///
+/// - `pushPayments`: Adds a list of payments to a Loan contract.
+/// - `pushTranches`: Adds a list of tranches to a Loan contract.
+/// - `fundN`: Funds `n` payments from a Loan contract.
+/// - `repossess`: Repossess a range of payments from a Loan contract and cancels it. The Vault will
+///   receive the ERC721 tokens and will cancel the tracked assets lent (absorbing the loss).
 contract Tintero is ERC4626, ERC721Holder, TinteroLoanFactory {
     using EnumerableSet for EnumerableSet.AddressSet;
 
