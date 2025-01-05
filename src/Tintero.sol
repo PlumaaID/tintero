@@ -77,7 +77,7 @@ contract Tintero is ERC4626, ERC721Holder, TinteroLoanFactory {
         IERC20Metadata asset_,
         address authority_
     )
-        ERC20(_prefix("t", asset_.name()), _prefix("Tinted", asset_.symbol()))
+        ERC20(_prefix("Tinted ", asset_.name()), _prefix("t", asset_.symbol()))
         ERC4626(asset_)
         AccessManaged(authority_)
     {}
@@ -93,9 +93,11 @@ contract Tintero is ERC4626, ERC721Holder, TinteroLoanFactory {
         uint256 tokenId,
         bytes memory data
     ) public override returns (bytes4) {
-        if (!isLoan(operator)) revert OnlyAuthorizedLoan();
+        if (msg.sender != operator || !isLoan(operator))
+            revert OnlyAuthorizedLoan();
         uint256 principal = abi.decode(data, (uint256));
         _lentTo[operator] -= principal;
+        _totalAssetsLent -= principal;
         return super.onERC721Received(operator, from, tokenId, data);
     }
 
@@ -155,12 +157,12 @@ contract Tintero is ERC4626, ERC721Holder, TinteroLoanFactory {
         bytes32 salt
     ) external {
         address predicted = _deployLoan(
-            salt,
             collateralCollection_,
             beneficiary_,
             defaultThreshold_,
             payments_,
-            collateralTokenIds_
+            collateralTokenIds_,
+            salt
         );
         if (!_loans.add(predicted)) revert DuplicatedLoan();
     }
@@ -190,6 +192,7 @@ contract Tintero is ERC4626, ERC721Holder, TinteroLoanFactory {
     ///
     /// - The loan MUST be created by this vault.
     function pushTranches(
+        TinteroLoan loan,
         uint96[] calldata paymentIndexes,
         address[] calldata recipients
     ) external restricted {
@@ -228,10 +231,8 @@ contract Tintero is ERC4626, ERC721Holder, TinteroLoanFactory {
     ) external restricted {
         address loan_ = address(loan);
         if (!isLoan(loan_)) revert OnlyAuthorizedLoan();
-
-        uint256 principalLost = _lentTo[loan_];
         loan.repossess(start, end);
-        _totalAssetsLent -= principalLost;
+        // onERC721Received will update _lentTo and _totalAssetsLent
         assert(_lentTo[loan_] == 0);
     }
 

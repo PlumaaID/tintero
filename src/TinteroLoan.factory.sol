@@ -19,12 +19,12 @@ abstract contract TinteroLoanFactory is AccessManaged {
 
     /// @dev Predict the address of a Loan contract using the provided parameters.
     function predictLoanAddress(
-        bytes32 salt,
         address collateralCollection_,
         address beneficiary_,
         uint16 defaultThreshold_,
         PaymentLib.Payment[] calldata payments_,
         uint256[] calldata collateralTokenIds_,
+        bytes32 salt,
         address caller_
     )
         public
@@ -48,25 +48,26 @@ abstract contract TinteroLoanFactory is AccessManaged {
 
     /// @dev Deploy a new Loan contract using the provided parameters.
     function _deployLoan(
-        bytes32 salt,
         address collateralCollection_,
         address beneficiary_,
         uint16 defaultThreshold_,
         PaymentLib.Payment[] calldata payments_,
-        uint256[] calldata collateralTokenIds_
+        uint256[] calldata collateralTokenIds_,
+        bytes32 salt
     ) internal returns (address loan) {
-        salt = _salt(salt, msg.sender);
         (address predicted, bytes memory bytecode, ) = predictLoanAddress(
-            salt,
             collateralCollection_,
             beneficiary_,
             defaultThreshold_,
             payments_,
             collateralTokenIds_,
+            salt,
             msg.sender
         );
 
-        if (predicted.code.length == 0) Create2.deploy(0, salt, bytecode);
+        if (predicted.code.length == 0)
+            Create2.deploy(0, _salt(salt, msg.sender), bytecode);
+
         emit LoanCreated(predicted);
         return predicted;
     }
@@ -80,19 +81,21 @@ abstract contract TinteroLoanFactory is AccessManaged {
         uint256[] calldata collateralTokenIds_
     ) internal view returns (bytes memory) {
         return
-            abi.encode(
+            bytes.concat(
                 type(ERC1967Proxy).creationCode,
-                INITIAL_ERC721_COLLATERAL_LOAN_IMPLEMENTATION,
-                abi.encodeCall(
-                    TinteroLoan.initialize,
-                    (
-                        authority(),
-                        address(this),
-                        collateralCollection_,
-                        beneficiary_,
-                        defaultThreshold_,
-                        payments_,
-                        collateralTokenIds_
+                abi.encode(
+                    INITIAL_ERC721_COLLATERAL_LOAN_IMPLEMENTATION,
+                    abi.encodeCall(
+                        TinteroLoan.initialize,
+                        (
+                            authority(),
+                            address(this),
+                            collateralCollection_,
+                            beneficiary_,
+                            defaultThreshold_,
+                            payments_,
+                            collateralTokenIds_
+                        )
                     )
                 )
             );

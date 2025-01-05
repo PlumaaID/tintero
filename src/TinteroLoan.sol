@@ -317,10 +317,13 @@ contract TinteroLoan is
         if (collateralTokenIds_.length != paymentsLength)
             revert MismatchedPaymentCollateralIds();
 
-        (, PaymentLib.Payment memory latest) = payment(totalPayments() - 1);
-
         uint256 totalPayments_ = totalPayments();
-        uint256 latestMaturity = latest.maturedAt();
+        uint256 latestMaturity = 0;
+
+        if (totalPayments_ > 0) {
+            (, PaymentLib.Payment memory latest) = payment(totalPayments_ - 1);
+            latestMaturity = latest.maturedAt();
+        }
 
         // Checks and Effects
         for (uint256 i = 0; i < paymentsLength; i++)

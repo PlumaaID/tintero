@@ -11,6 +11,7 @@ import "forge-std/Test.sol";
 // temporary interface for minting USDC
 // should be implemented more extensively, and organized somewhere
 interface IUSDC {
+    function decimals() external view returns (uint8);
     function balanceOf(address account) external view returns (uint256);
     function mint(address to, uint256 amount) external;
     function configureMinter(

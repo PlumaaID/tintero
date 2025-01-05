@@ -17,6 +17,8 @@ contract BaseTest is Test, USDCTest {
     EndorserMock internal endorser;
     TinteroMock internal tintero;
 
+    address internal constant beneficiary = address(0xdeadbeef);
+
     uint64 internal constant PROVENANCE_AUTHORIZER_ROLE =
         uint64(bytes8(keccak256("PlumaaID.PROVENANCE_AUTHORIZER")));
     uint64 internal constant WITNESS_SETTER_ROLE =
