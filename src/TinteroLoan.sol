@@ -22,6 +22,30 @@ import {TinteroLoanView} from "./TinteroLoan.view.sol";
 import {TinteroLoanStorage} from "./TinteroLoan.storage.sol";
 import {LoanState} from "./interfaces/ITinteroLoan.types.sol";
 
+/// @title ERC721 Collateral Loan Interface
+///
+/// @notice Loan that uses an ERC721 token as collateral. The loan is funded with
+/// an ERC20 token and structured in a series of payments and tranches they belong to.
+///
+/// This contract behaves as a state machine with the following states:
+///
+/// - CREATED: The loan has been initialized and payments or tranches are being added.
+/// - CANCELED: The loan has been canceled and the collateral is being withdrawn.
+/// - FUNDING: The loan is being funded by the liquidity provider.
+/// - FUNDED: The loan has been funded and the payments are being repaid.
+/// - DEFAULTED: The loan has defaulted and the collateral can be repossessed.
+/// - REPOSSESSED: The collateral is being repossessed by the liquidity provider.
+/// - PAID: The loan has been fully repaid.
+///
+/// == Concepts
+///
+/// - Payments: A payment is a structure that represents a payment to be made back to the loan.
+///   Each payment has a principal amount and an interest rate that is accrued over time in a
+///   linear fashion. A premium rate is added to the interest rate after the payment is due.
+/// - Tranches: A tranche is a collection of payments that have the same recipient. They are used
+///   to sell parts of the loan to different investors.
+/// - Collateral: The collateral is an ERC721 token that is used to back the payments. A payment's
+///   collateral can be repossessed if the loan defaults after a default threshold.
 contract TinteroLoan is
     Initializable,
     UUPSUpgradeable,

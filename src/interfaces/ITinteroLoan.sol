@@ -24,7 +24,7 @@ import {LoanState} from "./ITinteroLoan.types.sol";
 ///     state DEFAULTED
 ///     state REPOSSESSED
 ///     state PAID
-
+///
 ///     [*] --> CREATED
 ///     CREATED --> FUNDING: calling fundN(...)
 ///     FUNDING --> FUNDED: calling fundN(...)
