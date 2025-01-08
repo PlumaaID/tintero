@@ -121,12 +121,12 @@ contract Tintero is ERC4626, ERC721Holder, TinteroLoanFactory {
     }
 
     /// @dev The maximum amount of assets that can be withdrawn.
-    /// This is the maximum between the owner's max withdrawable assets and the vault's asset balance.
+    /// This is the minimum between the owner's max withdrawable assets and the vault's asset balance.
     function maxWithdraw(address owner) public view override returns (uint256) {
         IERC20Metadata asset_ = IERC20Metadata(asset());
 
         return
-            Math.max(
+            Math.min(
                 super.maxWithdraw(owner), // Max owner withdrawable assets
                 asset_.balanceOf(owner) // Total available vault's asset balance
             );
@@ -242,7 +242,7 @@ contract Tintero is ERC4626, ERC721Holder, TinteroLoanFactory {
 
     /// @dev Virtual offset to defend against inflation attacks.
     /// See https://docs.openzeppelin.com/contracts/5.x/erc4626#defending_with_a_virtual_offset
-    function _decimalsOffset() internal pure override returns (uint8) {
+    function _decimalsOffset() internal pure virtual override returns (uint8) {
         return 3;
     }
 

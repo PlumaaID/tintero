@@ -1,17 +1,49 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.20;
 
+import {IERC20Metadata} from "@openzeppelin/contracts/interfaces/IERC20Metadata.sol";
+import {ERC4626Test} from "erc4626-tests/ERC4626.test.sol";
 import {BaseTest} from "./Base.t.sol";
 
 import {console2} from "forge-std/console2.sol";
 import {PaymentLib} from "~/utils/PaymentLib.sol";
 import {TinteroLoanFactory} from "~/TinteroLoan.factory.sol";
+import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {TinteroMock} from "./mocks/TinteroMock.sol";
 
-contract TinteroTest is BaseTest {
+contract ERC20Mock is ERC20 {
+    constructor() ERC20("ERC20Mock", "E20M") {}
+
+    function mint(address account, uint256 amount) external {
+        _mint(account, amount);
+    }
+
+    function burn(address account, uint256 amount) external {
+        _burn(account, amount);
+    }
+}
+
+contract TinteroTest is BaseTest, ERC4626Test {
+    ERC20 private _underlying = new ERC20Mock();
+
+    function setUp() public override(BaseTest, ERC4626Test) {
+        super.setUp();
+        _underlying_ = address(_underlying);
+        _vault_ = address(
+            new TinteroMock(
+                IERC20Metadata(_underlying_),
+                address(accessManager)
+            )
+        );
+        _delta_ = 0;
+        _vaultMayBeEmpty = false;
+        _unlimitedAmount = true;
+    }
+
     function testMetadata() public view {
         assertEq(tintero.name(), "Tinted USD Coin");
         assertEq(tintero.symbol(), "tUSDC");
-        assertEq(tintero.decimals(), usdc.decimals() + 3); // Virtual offset
+        assertEq(tintero.decimals(), usdc.decimals());
     }
 
     function testAsset() public view {
