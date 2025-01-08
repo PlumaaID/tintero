@@ -409,6 +409,7 @@ contract TinteroLoan is
             // Intentionally last check since it's also a side effect
             revert DuplicatedCollateral(collateralTokenId);
         $.payments.push(payment_);
+        $.collateralTokenIds.push(collateralTokenId);
         emit CreatedPayment(i, collateralTokenId, payment_);
         return maturedAt;
     }

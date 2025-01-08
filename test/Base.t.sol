@@ -9,7 +9,7 @@ import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.s
 import {IERC20Metadata} from "@openzeppelin/contracts/interfaces/IERC20Metadata.sol";
 import {IWitness, Proof} from "@WitnessCo/interfaces/IWitness.sol";
 import {EndorserMock} from "./mocks/EndorserMock.sol";
-import {TinteroMock} from "./mocks/TinteroMock.sol";
+import {TinteroMock, Tintero} from "./mocks/TinteroMock.sol";
 import {USDCTest} from "./USDCTest.t.sol";
 
 contract BaseTest is Test, USDCTest {
@@ -58,6 +58,22 @@ contract BaseTest is Test, USDCTest {
         tintero = new TinteroMock(
             IERC20Metadata(address(usdc)),
             address(accessManager)
+        );
+
+        _setupManagerRole(address(tintero));
+    }
+
+    function _setupManagerRole(address target) internal {
+        bytes4[] memory selectors = new bytes4[](4);
+        selectors[0] = Tintero.pushPayments.selector;
+        selectors[1] = Tintero.pushTranches.selector;
+        selectors[2] = Tintero.fundN.selector;
+        selectors[3] = Tintero.repossess.selector;
+
+        accessManager.setTargetFunctionRole(
+            target,
+            selectors,
+            TINTERO_MANAGER_ROLE
         );
     }
 }

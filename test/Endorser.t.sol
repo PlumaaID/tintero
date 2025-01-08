@@ -5,16 +5,34 @@ import {BaseTest} from "./Base.t.sol";
 import {ICreateX} from "createx/ICreateX.sol";
 import {AccessManager} from "@openzeppelin/contracts/access/manager/AccessManager.sol";
 import {IWitness, Proof} from "@WitnessCo/interfaces/IWitness.sol";
+import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 import {Endorser} from "~/Endorser.sol";
 
 contract EndorserTest is BaseTest {
+    using Strings for *;
+
     bytes32 internal constant _MINT_AUTHORIZATION_TYPEHASH =
         keccak256("MintRequest(bytes32 leaf,address to)");
 
     function testInitialized() public {
         vm.expectRevert();
         endorser.initialize(address(accessManager), WITNESS);
+    }
+
+    function testGetProvenanceHash(bytes memory data) public view {
+        assertEq(endorser.getProvenanceHash(data), sha256(data));
+    }
+
+    function testTokenURI(uint256 tokenId) public {
+        endorser.$_safeMint(address(0xdeadbeef), tokenId);
+        assertEq(
+            endorser.tokenURI(tokenId),
+            string.concat(
+                "https://api.plumaa.id/protocol/endorser/metadata/",
+                tokenId.toString()
+            )
+        );
     }
 
     function testAccessManager() public view {
@@ -37,7 +55,6 @@ contract EndorserTest is BaseTest {
         (address authorizer, uint256 authorizerPk) = makeAddrAndKey(
             authorizerSeed
         );
-        accessManager.grantRole(PROVENANCE_AUTHORIZER_ROLE, authorizer, 0);
         Endorser.MintRequestData memory mintRequest = Endorser.MintRequestData({
             authorizer: authorizer,
             to: to,
@@ -52,6 +69,13 @@ contract EndorserTest is BaseTest {
             rightRange: new bytes32[](0),
             targetRoot: bytes32(0)
         });
+
+        // Can't mint if authorizer is does not have the PROVENANCE_AUTHORIZER_ROLE
+        vm.prank(minter);
+        vm.expectRevert();
+        endorser.mint(mintRequest, mockProof);
+
+        accessManager.grantRole(PROVENANCE_AUTHORIZER_ROLE, authorizer, 0);
 
         // Mint
         vm.prank(minter);

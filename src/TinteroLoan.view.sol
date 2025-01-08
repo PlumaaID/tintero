@@ -130,7 +130,7 @@ abstract contract TinteroLoanView is TinteroLoanStorage {
         if ($._canceled) return LoanState.CANCELED;
         if (_defaulted(current)) return LoanState.DEFAULTED;
         if (fundingIndex == totalPayments()) return LoanState.FUNDED;
-        if (fundingIndex == 0) return LoanState.FUNDING;
+        if (fundingIndex != 0) return LoanState.FUNDING;
         return LoanState.CREATED;
     }
 
