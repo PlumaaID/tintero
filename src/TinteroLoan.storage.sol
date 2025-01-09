@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
-import {ERC721Burnable} from "@openzeppelin/contracts/token/ERC721/extensions/ERC721Burnable.sol";
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import {Checkpoints} from "@openzeppelin/contracts/utils/structs/Checkpoints.sol";
 
@@ -15,13 +13,13 @@ abstract contract TinteroLoanStorage is ITinteroLoan {
         0x1f389b2eba3c6a855b1e43cd4e972600e00166178892203933678c6474e96300;
 
     struct LoanStorage {
-        IERC4626 liquidityProvider;
+        address liquidityProvider;
         // Invariant: _tranches.length() <= payments.length - 1
         Checkpoints.Trace160 _tranches; // paymentIndex << 160 | recipient
         bool _canceled;
         bool _repossessed;
         // 94 bits gap
-        ERC721Burnable collateralAsset;
+        address collateralAsset;
         // 96 bits gap
         PaymentLib.Payment[] payments;
         uint256[] collateralTokenIds;

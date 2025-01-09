@@ -10,6 +10,7 @@ import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import {PaymentLib} from "./utils/PaymentLib.sol";
 import {TinteroLoanStorage} from "./TinteroLoan.storage.sol";
 import {LoanState} from "./interfaces/ITinteroLoan.types.sol";
+import {IPaymentCallback} from "./interfaces/IPaymentCallback.sol";
 
 abstract contract TinteroLoanView is TinteroLoanStorage {
     using PaymentLib for PaymentLib.Payment;
@@ -18,17 +19,17 @@ abstract contract TinteroLoanView is TinteroLoanStorage {
 
     /// @dev Address of the ERC20 token lent.
     function lendingAsset() public view returns (IERC20) {
-        return IERC20(IERC4626(liquidityProvider()).asset());
+        return IERC20(IERC4626(address(liquidityProvider())).asset());
     }
 
     /// @dev Address of the ERC721 token used as collateral.
     function collateralAsset() public view returns (ERC721Burnable) {
-        return getTinteroLoanStorage().collateralAsset;
+        return ERC721Burnable(getTinteroLoanStorage().collateralAsset);
     }
 
     /// @dev Address of the liquidity provider funding the loan.
-    function liquidityProvider() public view returns (address) {
-        return address(getTinteroLoanStorage().liquidityProvider);
+    function liquidityProvider() public view returns (IPaymentCallback) {
+        return IPaymentCallback(getTinteroLoanStorage().liquidityProvider);
     }
 
     /// @dev Get the index at which the tranche starts and its recipient.

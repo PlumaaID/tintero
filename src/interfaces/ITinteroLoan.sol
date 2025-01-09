@@ -8,6 +8,7 @@ import {PaymentLib} from "../utils/PaymentLib.sol";
 import {ITinteroLoanEvents} from "./ITinteroLoan.events.sol";
 import {ITinteroLoanErrors} from "./ITinteroLoan.errors.sol";
 import {LoanState} from "./ITinteroLoan.types.sol";
+import {IPaymentCallback} from "./IPaymentCallback.sol";
 
 /// @title ERC721 Collateral Loan Interface
 ///
@@ -44,7 +45,7 @@ interface ITinteroLoan is ITinteroLoanEvents, ITinteroLoanErrors {
     function collateralAsset() external view returns (ERC721Burnable);
 
     /// @dev Address of the liquidity provider funding the loan.
-    function liquidityProvider() external view returns (address);
+    function liquidityProvider() external view returns (IPaymentCallback);
 
     /// @dev Get the index at which the tranche starts and its recipient.
     /// A tranche is a collection of payments from [paymentIndex ?? 0, nextPaymentIndex)

@@ -2,7 +2,6 @@
 pragma solidity ^0.8.20;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 
 import {ERC721Burnable} from "@openzeppelin/contracts/token/ERC721/extensions/ERC721Burnable.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -89,10 +88,9 @@ contract TinteroLoan is
     ) public initializer {
         __AccessManaged_init(authority_);
         LoanStorage storage $ = getTinteroLoanStorage();
-        if (beneficiary_ == address(0) || beneficiary_ == liquidityProvider_)
-            revert InvalidBeneficiary();
-        $.liquidityProvider = IERC4626(liquidityProvider_);
-        $.collateralAsset = ERC721Burnable(collateralAsset_);
+        if (beneficiary_ == address(0)) revert InvalidBeneficiary();
+        $.liquidityProvider = liquidityProvider_;
+        $.collateralAsset = collateralAsset_;
         $.beneficiary = beneficiary_;
         $.defaultThreshold = defaultThreshold_;
         _validatePushPaymentsAndCollectCollateral(
@@ -130,7 +128,8 @@ contract TinteroLoan is
         uint256[] calldata collateralTokenIds,
         PaymentLib.Payment[] calldata payment_
     ) external {
-        if (msg.sender != liquidityProvider()) revert OnlyLiquidityProvider();
+        if (msg.sender != address(liquidityProvider()))
+            revert OnlyLiquidityProvider();
         _validateStateBitmap(_encodeStateBitmap(LoanState.CREATED));
         _validatePushPaymentsAndCollectCollateral(collateralTokenIds, payment_);
     }
@@ -155,7 +154,8 @@ contract TinteroLoan is
         uint96[] calldata paymentIndexes,
         address[] calldata recipients
     ) external {
-        if (msg.sender != liquidityProvider()) revert OnlyLiquidityProvider();
+        if (msg.sender != address(liquidityProvider()))
+            revert OnlyLiquidityProvider();
         _validateStateBitmap(_encodeStateBitmap(LoanState.CREATED));
         _validateAndPushTranches(paymentIndexes, recipients);
     }
@@ -191,7 +191,7 @@ contract TinteroLoan is
 
         // Interactions
         lendingAsset().safeTransferFrom(
-            liquidityProvider(),
+            address(liquidityProvider()),
             beneficiary(),
             totalPrincipal
         );
@@ -275,7 +275,8 @@ contract TinteroLoan is
     /// - Emits a `RepossessedPayment` event for each payment repossessed.
     function repossess(uint256 start, uint256 end) external {
         // Checks
-        if (msg.sender != liquidityProvider()) revert OnlyLiquidityProvider();
+        if (msg.sender != address(liquidityProvider()))
+            revert OnlyLiquidityProvider();
         LoanState state_ = _validateStateBitmap(
             _encodeStateBitmap(LoanState.DEFAULTED) |
                 _encodeStateBitmap(LoanState.REPOSSESSED)
@@ -483,7 +484,11 @@ contract TinteroLoan is
         // Interactions
         for (uint256 i = start; i < end; i++) {
             (uint256 tokenId, PaymentLib.Payment memory payment_) = payment(i);
-            _transferCollateral(tokenId, beneficiary(), payment_.principal);
+            collateralAsset().safeTransferFrom(
+                address(this),
+                beneficiary(),
+                tokenId
+            );
             emit WithdrawnPayment(i, tokenId, payment_.principal);
         }
     }
@@ -498,14 +503,14 @@ contract TinteroLoan is
     function _prepareToPay(
         uint256 start,
         uint256 end
-    ) internal returns (uint256) {
-        uint256 toPay = 0;
+    ) internal returns (uint256 toPay, uint256 principalPaid) {
         for (uint256 i = start; i < end; i++) {
             (
                 uint256 collateralTokenId,
                 PaymentLib.Payment memory payment_
             ) = payment(i);
             uint48 timepoint = Time.timestamp();
+            principalPaid += payment_.principal;
             toPay += payment_.principal + payment_.accruedInterest(timepoint);
             emit RepaidPayment(
                 i,
@@ -516,7 +521,7 @@ contract TinteroLoan is
             );
         }
 
-        return toPay;
+        return (toPay, principalPaid);
     }
 
     /// @dev Repays the current loan and `n` future payments.
@@ -538,7 +543,8 @@ contract TinteroLoan is
     ) internal {
         LoanStorage storage $ = getTinteroLoanStorage();
         $.currentPaymentIndex = end.toUint16();
-        _repayByTranches(start, end);
+        uint256 principalPaid = _repayByTranches(start, end);
+        liquidityProvider().onDebit(principalPaid);
         _disposeCollateral(start, end, collateralReceiver);
     }
 
@@ -558,15 +564,24 @@ contract TinteroLoan is
         if (state_ == LoanState.DEFAULTED)
             getTinteroLoanStorage()._repossessed = true;
 
+        uint256 principalRepossessed = 0;
+
         for (uint256 i = start; i < end; i++) {
             (uint256 tokenId, PaymentLib.Payment memory payment_) = payment(i);
-            _transferCollateral(
-                tokenId,
-                liquidityProvider(),
-                payment_.principal
-            );
+            principalRepossessed += payment_.principal;
             // No need to update heldTokenIds since they can't be transferred back anymore
             emit RepossessedPayment(i, tokenId, payment_.principal);
+        }
+
+        liquidityProvider().onDebit(principalRepossessed);
+
+        for (uint256 i = start; i < end; i++) {
+            (uint256 tokenId, ) = payment(i);
+            collateralAsset().safeTransferFrom(
+                address(this),
+                address(liquidityProvider()),
+                tokenId
+            );
         }
     }
 
@@ -614,7 +629,10 @@ contract TinteroLoan is
     /// Effects:
     ///
     /// - The principal of the repaid payments is transferred from the sender to the receiver of each payment tranche
-    function _repayByTranches(uint256 start, uint256 end) private {
+    function _repayByTranches(
+        uint256 start,
+        uint256 end
+    ) private returns (uint256 principalPaid) {
         uint256 trancheIndex_ = currentTrancheIndex();
         (uint96 tranchePaymentIndex_, address trancheReceiver_) = tranche(
             trancheIndex_
@@ -631,10 +649,15 @@ contract TinteroLoan is
             (nextTranchePaymentIndex_, nextTrancheReceiver_) = tranche(
                 ++trancheIndex_ // Next tranche
             );
+            (uint256 toPay, uint256 principalPaidInPayment) = _prepareToPay(
+                start,
+                nextTranchePaymentIndex_
+            );
+            principalPaid += principalPaidInPayment;
             lendingAsset().safeTransferFrom(
                 msg.sender,
                 trancheReceiver_,
-                _prepareToPay(start, nextTranchePaymentIndex_)
+                toPay
             );
             start = nextTranchePaymentIndex_;
             trancheReceiver_ = nextTrancheReceiver_;
@@ -652,32 +675,17 @@ contract TinteroLoan is
         address collateralReceiver
     ) private {
         for (uint256 i = start; i < end; i++) {
-            (uint256 tokenId, PaymentLib.Payment memory payment_) = payment(i);
+            (uint256 tokenId, ) = payment(i);
             if (collateralReceiver == address(0))
                 collateralAsset().burn(tokenId);
             else
-                _transferCollateral(
-                    tokenId,
+                collateralAsset().safeTransferFrom(
+                    address(this),
                     collateralReceiver,
-                    payment_.principal
+                    tokenId
                 );
 
             // No need to update heldTokenIds since they can't be transferred back anymore
         }
-    }
-
-    /// @dev Transfer the collateral tokenId to the recipient and
-    /// includes the encoded principal as data.
-    function _transferCollateral(
-        uint256 tokenId,
-        address to,
-        uint256 principal
-    ) private {
-        collateralAsset().safeTransferFrom(
-            address(this),
-            to,
-            tokenId,
-            abi.encode(principal)
-        );
     }
 }

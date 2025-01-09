@@ -7,12 +7,12 @@ import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 import {ERC4626, ERC20} from "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol";
 import {AccessManaged} from "@openzeppelin/contracts/access/manager/AccessManaged.sol";
-import {ERC721Holder} from "@openzeppelin/contracts/token/ERC721/utils/ERC721Holder.sol";
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 
 import {PaymentLib} from "./utils/PaymentLib.sol";
 import {TinteroLoan} from "./TinteroLoan.sol";
 import {TinteroLoanFactory} from "./TinteroLoan.factory.sol";
+import {IPaymentCallback} from "./interfaces/IPaymentCallback.sol";
 
 /// @title Tintero Vault
 ///
@@ -55,7 +55,7 @@ import {TinteroLoanFactory} from "./TinteroLoan.factory.sol";
 /// - `fundN`: Funds `n` payments from a Loan contract.
 /// - `repossess`: Repossess a range of payments from a Loan contract and cancels it. The Vault will
 ///   receive the ERC721 tokens and will cancel the tracked assets lent (absorbing the loss).
-contract Tintero is ERC4626, ERC721Holder, TinteroLoanFactory {
+contract Tintero is ERC4626, TinteroLoanFactory, IPaymentCallback {
     using EnumerableSet for EnumerableSet.AddressSet;
 
     /// @dev Reverts if a Loan contract is already created by this vault.
@@ -85,21 +85,6 @@ contract Tintero is ERC4626, ERC721Holder, TinteroLoanFactory {
     /**********************/
     /*** View Functions ***/
     /**********************/
-
-    /// @dev Receives ERC721 tokens from Loan contracts and updates the total lent assets.
-    function onERC721Received(
-        address operator,
-        address from,
-        uint256 tokenId,
-        bytes memory data
-    ) public override returns (bytes4) {
-        if (msg.sender != operator || !isLoan(operator))
-            revert OnlyAuthorizedLoan();
-        uint256 principal = abi.decode(data, (uint256));
-        _lentTo[operator] -= principal;
-        _totalAssetsLent -= principal;
-        return super.onERC721Received(operator, from, tokenId, data);
-    }
 
     /// @inheritdoc ERC4626
     function totalAssets() public view override returns (uint256) {
@@ -141,6 +126,22 @@ contract Tintero is ERC4626, ERC721Holder, TinteroLoanFactory {
                 super.maxRedeem(owner), // Max owner redeemable shares
                 convertToShares(asset_.balanceOf(owner)) // Max amount of shares redeemable for vault's asset balance
             );
+    }
+
+    /**********************/
+    /*** Loan Functions ***/
+    /**********************/
+
+    /// @dev Debits an outstanding principal from a Loan contract.
+    /// Must be called by the Loan contract when a payment is either:
+    ///
+    /// - Repaid (value is accrued through interest)
+    /// - Repossesses (value is lost)
+    function onDebit(uint256 principal) external {
+        address loan = msg.sender;
+        if (!isLoan(loan)) revert OnlyAuthorizedLoan();
+        _lentTo[loan] -= principal;
+        _totalAssetsLent -= principal;
     }
 
     /**************************/
