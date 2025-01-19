@@ -127,7 +127,7 @@ interface ITinteroLoan is ITinteroLoanEvents, ITinteroLoanErrors {
     function pushPayments(
         uint256[] calldata collateralTokenIds,
         PaymentLib.Payment[] calldata payments
-    ) external;
+    ) external returns (uint256 principalRequested);
 
     /// @dev Adds a list of tranches to the loan.
     ///

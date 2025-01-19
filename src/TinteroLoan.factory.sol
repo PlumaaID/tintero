@@ -22,8 +22,6 @@ abstract contract TinteroLoanFactory is AccessManaged {
         address collateralCollection_,
         address beneficiary_,
         uint16 defaultThreshold_,
-        PaymentLib.Payment[] calldata payments_,
-        uint256[] calldata collateralTokenIds_,
         bytes32 salt,
         address caller_
     )
@@ -34,9 +32,7 @@ abstract contract TinteroLoanFactory is AccessManaged {
         bytecode = _loanProxyBytecode(
             collateralCollection_,
             beneficiary_,
-            defaultThreshold_,
-            payments_,
-            collateralTokenIds_
+            defaultThreshold_
         );
         bytecodeHash = keccak256(bytecode);
         return (
@@ -51,16 +47,12 @@ abstract contract TinteroLoanFactory is AccessManaged {
         address collateralCollection_,
         address beneficiary_,
         uint16 defaultThreshold_,
-        PaymentLib.Payment[] calldata payments_,
-        uint256[] calldata collateralTokenIds_,
         bytes32 salt
     ) internal returns (address loan) {
         (address predicted, bytes memory bytecode, ) = predictLoanAddress(
             collateralCollection_,
             beneficiary_,
             defaultThreshold_,
-            payments_,
-            collateralTokenIds_,
             salt,
             msg.sender
         );
@@ -77,9 +69,7 @@ abstract contract TinteroLoanFactory is AccessManaged {
     function _loanProxyBytecode(
         address collateralCollection_,
         address beneficiary_,
-        uint16 defaultThreshold_,
-        PaymentLib.Payment[] calldata payments_,
-        uint256[] calldata collateralTokenIds_
+        uint16 defaultThreshold_
     ) internal view returns (bytes memory) {
         return
             bytes.concat(
@@ -92,9 +82,7 @@ abstract contract TinteroLoanFactory is AccessManaged {
                             address(this),
                             collateralCollection_,
                             beneficiary_,
-                            defaultThreshold_,
-                            payments_,
-                            collateralTokenIds_
+                            defaultThreshold_
                         )
                     )
                 )

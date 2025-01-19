@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {IERC20Metadata} from "@openzeppelin/contracts/interfaces/IERC20Metadata.sol";
 
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import {ERC4626, ERC20} from "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol";
 import {AccessManaged} from "@openzeppelin/contracts/access/manager/AccessManaged.sol";
@@ -56,6 +57,7 @@ import {IPaymentCallback} from "./interfaces/IPaymentCallback.sol";
 /// - `repossess`: Repossess a range of payments from a Loan contract and cancels it. The Vault will
 ///   receive the ERC721 tokens and will cancel the tracked assets lent (absorbing the loss).
 contract Tintero is ERC4626, TinteroLoanFactory, IPaymentCallback {
+    using SafeERC20 for IERC20Metadata;
     using EnumerableSet for EnumerableSet.AddressSet;
 
     /// @dev Reverts if a Loan contract is already created by this vault.
@@ -165,11 +167,10 @@ contract Tintero is ERC4626, TinteroLoanFactory, IPaymentCallback {
             collateralCollection_,
             beneficiary_,
             defaultThreshold_,
-            payments_,
-            collateralTokenIds_,
             salt
         );
         if (!_loans.add(predicted)) revert DuplicatedLoan();
+        _pushPayments(TinteroLoan(predicted), collateralTokenIds_, payments_);
     }
 
     /*************************/
@@ -184,9 +185,9 @@ contract Tintero is ERC4626, TinteroLoanFactory, IPaymentCallback {
     function pushPayments(
         TinteroLoan loan,
         uint256[] calldata collateralTokenIds,
-        PaymentLib.Payment[] calldata payment_
+        PaymentLib.Payment[] calldata payments_
     ) external restricted onlyLoan(address(loan)) {
-        loan.pushPayments(collateralTokenIds, payment_);
+        _pushPayments(loan, collateralTokenIds, payments_);
     }
 
     /// @dev Adds a list of tranches to a Loan contract. Calls Loan#pushTranches.
@@ -251,6 +252,18 @@ contract Tintero is ERC4626, TinteroLoanFactory, IPaymentCallback {
     /**************************/
     /*** Internal Functions ***/
     /**************************/
+
+    /// @dev Pushes a list of payments to a Loan contract and increases its allowance accordingly.
+    function _pushPayments(
+        TinteroLoan loan,
+        uint256[] calldata collateralTokenIds,
+        PaymentLib.Payment[] calldata payment_
+    ) internal {
+        IERC20Metadata(asset()).safeIncreaseAllowance(
+            address(loan),
+            loan.pushPayments(collateralTokenIds, payment_)
+        );
+    }
 
     /// @dev Virtual offset to defend against inflation attacks.
     /// See https://docs.openzeppelin.com/contracts/5.x/erc4626#defending_with_a_virtual_offset

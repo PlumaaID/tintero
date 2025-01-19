@@ -127,10 +127,12 @@ abstract contract TinteroLoanView is TinteroLoanStorage {
 
         if ($._repossessed) return LoanState.REPOSSESSED;
         uint256 current = currentPaymentIndex();
-        if (current == totalPayments()) return LoanState.PAID;
+        uint256 totalPaymentsCount = totalPayments();
+        if (totalPaymentsCount == 0) return LoanState.CREATED; // No payments, no further state
+        if (current == totalPaymentsCount) return LoanState.PAID;
         if ($._canceled) return LoanState.CANCELED;
         if (_defaulted(current)) return LoanState.DEFAULTED;
-        if (fundingIndex == totalPayments()) return LoanState.ONGOING;
+        if (fundingIndex == totalPaymentsCount) return LoanState.ONGOING;
         if (fundingIndex != 0) return LoanState.FUNDING;
         return LoanState.CREATED;
     }

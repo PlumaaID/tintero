@@ -75,21 +75,15 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
     /// @param collateralAsset_ The ERC721 token used as collateral.
     /// @param beneficiary_ The address to receive the principal once funded.
     /// @param defaultThreshold_ The number of missed payments at which the loan defaults.
-    /// @param payments_ The list of payments to be added to the loan.
-    /// @param collateralTokenIds_ The list of collateral tokenIds to be added to the loan.
     ///
     /// Requirements:
     ///
     /// - The beneficiary MUST NOT be the liquidity provider or the zero address.
-    ///
-    /// See `_validatePushPaymentsAndCollectCollateral` for more details on the requirements.
     function initialize(
         address liquidityProvider_,
         address collateralAsset_,
         address beneficiary_,
-        uint16 defaultThreshold_,
-        PaymentLib.Payment[] calldata payments_,
-        uint256[] calldata collateralTokenIds_
+        uint16 defaultThreshold_
     ) public initializer {
         LoanStorage storage $ = getTinteroLoanStorage();
         if (beneficiary_ == address(0)) revert InvalidBeneficiary();
@@ -97,10 +91,6 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
         $.collateralAsset = collateralAsset_;
         $.beneficiary = beneficiary_;
         $.defaultThreshold = defaultThreshold_;
-        _validatePushPaymentsAndCollectCollateral(
-            collateralTokenIds_,
-            payments_
-        );
     }
 
     /**************************/
@@ -131,9 +121,13 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
     function pushPayments(
         uint256[] calldata collateralTokenIds,
         PaymentLib.Payment[] calldata payment_
-    ) external onlyLiquidityProvider {
+    ) external onlyLiquidityProvider returns (uint256 principalRequested) {
         _validateStateBitmap(_encodeStateBitmap(LoanState.CREATED));
-        _validatePushPaymentsAndCollectCollateral(collateralTokenIds, payment_);
+        return
+            _validatePushPaymentsAndCollectCollateral(
+                collateralTokenIds,
+                payment_
+            );
     }
 
     /// @dev Adds a list of tranches to the loan.
@@ -312,7 +306,7 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
     function _validatePushPaymentsAndCollectCollateral(
         uint256[] calldata collateralTokenIds_,
         PaymentLib.Payment[] calldata payments_
-    ) internal {
+    ) internal returns (uint256) {
         uint256 paymentsLength = payments_.length;
         // Checks
         if (collateralTokenIds_.length != paymentsLength)
@@ -327,18 +321,22 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
         }
 
         // Checks and Effects
-        for (uint256 i = 0; i < paymentsLength; i++)
+        uint256 principalRequested = 0;
+        for (uint256 i = 0; i < paymentsLength; i++) {
             latestMaturity = _validatePushPayment(
                 totalPayments_ + i,
                 latestMaturity,
                 collateralTokenIds_[i],
                 payments_[i]
             );
-
+            principalRequested += payments_[i].principal;
+        }
         // Interactions
         ERC721Burnable asset = collateralAsset();
-        for (uint256 i = 0; i < payments_.length; i++)
+        for (uint256 i = 0; i < paymentsLength; i++)
             _collectCollateral(asset, collateralTokenIds_[i]);
+
+        return principalRequested;
     }
 
     /// @dev Validates the tranches and adds them to the loan.

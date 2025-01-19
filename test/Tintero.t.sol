@@ -66,8 +66,6 @@ contract TinteroTest is BaseTest, ERC4626Test {
             address(endorser),
             beneficiary,
             3,
-            payments,
-            collateralTokenIds,
             salt,
             caller
         );
@@ -136,8 +134,6 @@ contract TinteroTest is BaseTest, ERC4626Test {
             address(endorser),
             beneficiary,
             3,
-            firstPayments,
-            firstCollateralIds,
             salt,
             caller
         );
