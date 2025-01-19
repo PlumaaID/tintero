@@ -235,6 +235,19 @@ contract Tintero is ERC4626, TinteroLoanFactory, IPaymentCallback {
         assert(_lentTo[address(loan)] == 0);
     }
 
+    /// @dev Upgrades a Loan contract to a new implementation. Calls Loan#upgradeToAndCall.
+    ///
+    /// Requirements:
+    ///
+    /// - The loan MUST be created by this vault.
+    function upgradeLoan(
+        TinteroLoan loan,
+        address newImplementation,
+        bytes calldata data
+    ) external restricted onlyLoan(address(loan)) {
+        loan.upgradeToAndCall(newImplementation, data);
+    }
+
     /**************************/
     /*** Internal Functions ***/
     /**************************/

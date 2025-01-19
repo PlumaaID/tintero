@@ -65,10 +65,11 @@ abstract contract TinteroLoanFactory is AccessManaged {
             msg.sender
         );
 
-        if (predicted.code.length == 0)
+        if (predicted.code.length == 0) {
             Create2.deploy(0, _salt(salt, msg.sender), bytecode);
+            emit LoanCreated(predicted);
+        }
 
-        emit LoanCreated(predicted);
         return predicted;
     }
 
@@ -88,7 +89,6 @@ abstract contract TinteroLoanFactory is AccessManaged {
                     abi.encodeCall(
                         TinteroLoan.initialize,
                         (
-                            authority(),
                             address(this),
                             collateralCollection_,
                             beneficiary_,

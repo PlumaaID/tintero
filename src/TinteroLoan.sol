@@ -12,7 +12,6 @@ import {Time} from "@openzeppelin/contracts/utils/types/Time.sol";
 import {Checkpoints} from "@openzeppelin/contracts/utils/structs/Checkpoints.sol";
 
 import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import {AccessManagedUpgradeable} from "@openzeppelin/contracts-upgradeable/access/manager/AccessManagedUpgradeable.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
 import {PaymentLib} from "./utils/PaymentLib.sol";
@@ -45,17 +44,25 @@ import {LoanState} from "./interfaces/ITinteroLoan.types.sol";
 ///   to sell parts of the loan to different investors.
 /// - Collateral: The collateral is an ERC721 token that is used to back the payments. A payment's
 ///   collateral can be repossessed if the loan defaults after a default threshold.
-contract TinteroLoan is
-    Initializable,
-    UUPSUpgradeable,
-    AccessManagedUpgradeable,
-    TinteroLoanView
-{
+contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
     using SafeERC20 for IERC20;
     using EnumerableSet for EnumerableSet.UintSet;
     using PaymentLib for PaymentLib.Payment;
     using Checkpoints for Checkpoints.Trace160;
     using SafeCast for uint256;
+
+    /// @dev Reverts if the caller is not the loan's liquidity provider
+    modifier onlyLiquidityProvider() {
+        if (msg.sender != address(liquidityProvider()))
+            revert OnlyLiquidityProvider();
+        _;
+    }
+
+    /// @dev Reverts if the caller is not the loan's beneficiary
+    modifier onlyBeneficiary() {
+        if (msg.sender != beneficiary()) revert OnlyBeneficiary();
+        _;
+    }
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -64,7 +71,6 @@ contract TinteroLoan is
 
     /// @dev Initializes the loan with the provided parameters.
     ///
-    /// @param authority_ The access manager for the loan. Can upgrade.
     /// @param liquidityProvider_ The address funding the loan.
     /// @param collateralAsset_ The ERC721 token used as collateral.
     /// @param beneficiary_ The address to receive the principal once funded.
@@ -78,7 +84,6 @@ contract TinteroLoan is
     ///
     /// See `_validatePushPaymentsAndCollectCollateral` for more details on the requirements.
     function initialize(
-        address authority_,
         address liquidityProvider_,
         address collateralAsset_,
         address beneficiary_,
@@ -86,7 +91,6 @@ contract TinteroLoan is
         PaymentLib.Payment[] calldata payments_,
         uint256[] calldata collateralTokenIds_
     ) public initializer {
-        __AccessManaged_init(authority_);
         LoanStorage storage $ = getTinteroLoanStorage();
         if (beneficiary_ == address(0)) revert InvalidBeneficiary();
         $.liquidityProvider = liquidityProvider_;
@@ -127,9 +131,7 @@ contract TinteroLoan is
     function pushPayments(
         uint256[] calldata collateralTokenIds,
         PaymentLib.Payment[] calldata payment_
-    ) external {
-        if (msg.sender != address(liquidityProvider()))
-            revert OnlyLiquidityProvider();
+    ) external onlyLiquidityProvider {
         _validateStateBitmap(_encodeStateBitmap(LoanState.CREATED));
         _validatePushPaymentsAndCollectCollateral(collateralTokenIds, payment_);
     }
@@ -153,9 +155,7 @@ contract TinteroLoan is
     function pushTranches(
         uint96[] calldata paymentIndexes,
         address[] calldata recipients
-    ) external {
-        if (msg.sender != address(liquidityProvider()))
-            revert OnlyLiquidityProvider();
+    ) external onlyLiquidityProvider {
         _validateStateBitmap(_encodeStateBitmap(LoanState.CREATED));
         _validateAndPushTranches(paymentIndexes, recipients);
     }
@@ -177,14 +177,15 @@ contract TinteroLoan is
     /// - Moves to ONGOING state if all payments are funded.
     /// - The `currentFundingIndex` is incremented by `n` or the remaining payments.
     /// - The principal of the funded payments is transferred from the liquidity provider to the beneficiary.
-    function fundN(uint256 n) external returns (uint256) {
+    function fundN(uint256 n) external {
+        if (n == 0) return;
+
         // Checks
         if (totalTranches() <= 0) revert EmptyTranches();
         _validateStateBitmap(
             _encodeStateBitmap(LoanState.CREATED) |
                 _encodeStateBitmap(LoanState.FUNDING)
         );
-        if (n == 0) return 0;
 
         // Effects
         uint256 totalPrincipal = _fundN(n);
@@ -195,8 +196,6 @@ contract TinteroLoan is
             beneficiary(),
             totalPrincipal
         );
-
-        return totalPrincipal;
     }
 
     /// @dev Withdraws the collateral to the beneficiary.
@@ -212,9 +211,10 @@ contract TinteroLoan is
     /// - Moves to CANCELED state.
     /// - Each payment collateral is transferred to the beneficiary.
     /// - Emits a `WithdrawnPayment` event for each payment withdrawn.
-    function withdrawPaymentCollateral(uint256 start, uint256 end) external {
-        // Checks
-        if (msg.sender != beneficiary()) revert OnlyBeneficiary();
+    function withdrawPaymentCollateral(
+        uint256 start,
+        uint256 end
+    ) external onlyBeneficiary {
         LoanState state_ = _validateStateBitmap(
             _encodeStateBitmap(LoanState.CANCELED) |
                 _encodeStateBitmap(LoanState.CREATED)
@@ -273,10 +273,10 @@ contract TinteroLoan is
     /// - Moves to REPOSSESSED state.
     /// - The collateral is transferred back to the liquidity provider.
     /// - Emits a `RepossessedPayment` event for each payment repossessed.
-    function repossess(uint256 start, uint256 end) external {
-        // Checks
-        if (msg.sender != address(liquidityProvider()))
-            revert OnlyLiquidityProvider();
+    function repossess(
+        uint256 start,
+        uint256 end
+    ) external onlyLiquidityProvider {
         LoanState state_ = _validateStateBitmap(
             _encodeStateBitmap(LoanState.DEFAULTED) |
                 _encodeStateBitmap(LoanState.REPOSSESSED)
@@ -430,7 +430,7 @@ contract TinteroLoan is
         address assetOwner = asset.ownerOf(tokenId);
         if (assetOwner != address(this)) {
             // Reverts if the transfer fails
-            // Unintentionally not using `safeTransferFrom` given the recipient is this contract.
+            // Intentionally not using `safeTransferFrom` given the recipient is this contract.
             asset.transferFrom(assetOwner, address(this), tokenId);
         }
     }
@@ -587,7 +587,7 @@ contract TinteroLoan is
 
     function _authorizeUpgrade(
         address newImplementation
-    ) internal override restricted {}
+    ) internal override onlyLiquidityProvider {}
 
     /*************************/
     /*** Private Functions ***/
