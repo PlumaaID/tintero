@@ -6,7 +6,7 @@ enum LoanState {
     CREATED,
     CANCELED,
     FUNDING,
-    FUNDED,
+    ONGOING,
     DEFAULTED,
     REPOSSESSED,
     PAID

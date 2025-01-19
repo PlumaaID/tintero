@@ -31,7 +31,7 @@ import {LoanState} from "./interfaces/ITinteroLoan.types.sol";
 /// - CREATED: The loan has been initialized and payments or tranches are being added.
 /// - CANCELED: The loan has been canceled and the collateral is being withdrawn.
 /// - FUNDING: The loan is being funded by the liquidity provider.
-/// - FUNDED: The loan has been funded and the payments are being repaid.
+/// - ONGOING: The loan has been funded and the payments are being repaid.
 /// - DEFAULTED: The loan has defaulted and the collateral can be repossessed.
 /// - REPOSSESSED: The collateral is being repossessed by the liquidity provider.
 /// - PAID: The loan has been fully repaid.
@@ -174,7 +174,7 @@ contract TinteroLoan is
     /// Effects:
     ///
     /// - Moves to FUNDING state
-    /// - Moves to FUNDED state if all payments are funded.
+    /// - Moves to ONGOING state if all payments are funded.
     /// - The `currentFundingIndex` is incremented by `n` or the remaining payments.
     /// - The principal of the funded payments is transferred from the liquidity provider to the beneficiary.
     function fundN(uint256 n) external returns (uint256) {
@@ -233,13 +233,13 @@ contract TinteroLoan is
     ///
     /// Requirements:
     ///
-    /// - The loan MUST be in FUNDED or DEFAULTED state.
+    /// - The loan MUST be in ONGOING or DEFAULTED state.
     /// - The sender MUST have enough funds to repay the principal of the specified payments
     /// - The sender MUST have approved this contract to transfer the principal amount
     ///
     /// Effects:
     ///
-    /// - Moves to FUNDED if paid until below the default threshold.
+    /// - Moves to ONGOING if paid until below the default threshold.
     /// - Moves to PAID state if all payments are repaid.
     /// - The `currentPaymentIndex` is incremented by `n` or the remaining payments.
     /// - The principal of the repaid payments is transferred from the sender to the receiver of each payment tranche
@@ -248,7 +248,7 @@ contract TinteroLoan is
     function repayN(uint256 n, address collateralReceiver) public {
         // Checks
         _validateStateBitmap(
-            _encodeStateBitmap(LoanState.FUNDED) |
+            _encodeStateBitmap(LoanState.ONGOING) |
                 _encodeStateBitmap(LoanState.DEFAULTED)
         );
 
@@ -441,7 +441,7 @@ contract TinteroLoan is
     /// Effects:
     ///
     /// - Moves to FUNDING state
-    /// - Moves to FUNDED state if all payments are funded.
+    /// - Moves to ONGOING state if all payments are funded.
     /// - The `currentFundingIndex` is incremented by `n` or the remaining payments.
     /// - The principal of the funded payments is transferred from the liquidity provider to the beneficiary.
     function _fundN(uint256 n) internal returns (uint256) {
@@ -497,7 +497,7 @@ contract TinteroLoan is
     ///
     /// Effects:
     ///
-    /// - Moves to FUNDED if paid until below the default threshold.
+    /// - Moves to ONGOING if paid until below the default threshold.
     /// - Moves to PAID state if all payments are repaid.
     /// - Emits a `RepaidPayment` event for each payment repaid.
     function _prepareToPay(
@@ -609,7 +609,7 @@ contract TinteroLoan is
     ///
     /// 0x000...10000
     ///   ^^^^^^----- ...
-    ///         ^---- FUNDED
+    ///         ^---- ONGOING
     ///          ^--- DEFAULTED
     ///           ^-- REPOSSESSED
     ///            ^- PAID

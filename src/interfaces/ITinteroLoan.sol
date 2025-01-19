@@ -21,20 +21,20 @@ import {IPaymentCallback} from "./IPaymentCallback.sol";
 ///     state CREATED
 ///     state CANCELED
 ///     state FUNDING
-///     state FUNDED
+///     state ONGOING
 ///     state DEFAULTED
 ///     state REPOSSESSED
 ///     state PAID
 ///
 ///     [*] --> CREATED
 ///     CREATED --> FUNDING: calling fundN(...)
-///     FUNDING --> FUNDED: calling fundN(...)
-///     CREATED --> FUNDED: calling fundN(...)
+///     FUNDING --> ONGOING: calling fundN(...)
+///     CREATED --> ONGOING: calling fundN(...)
 ///     CREATED --> CANCELED: calling withdrawPaymentCollateral()
-///     FUNDED --> DEFAULTED: after defaultThreshold() payments are missed
-///     FUNDED --> PAID: calling repayN(...)
+///     ONGOING --> DEFAULTED: after defaultThreshold() payments are missed
+///     ONGOING --> PAID: calling repayN(...)
 ///     DEFAULTED --> REPOSSESSED: calling recall(...)
-///     DEFAULTED --> FUNDED: calling repayN(...)
+///     DEFAULTED --> ONGOING: calling repayN(...)
 ///     DEFAULTED --> PAID: calling repayN(...)
 /// ```
 interface ITinteroLoan is ITinteroLoanEvents, ITinteroLoanErrors {
@@ -164,7 +164,7 @@ interface ITinteroLoan is ITinteroLoanEvents, ITinteroLoanErrors {
     /// Effects:
     ///
     /// - Moves to FUNDING state
-    /// - Moves to FUNDED state if all payments are funded.
+    /// - Moves to ONGOING state if all payments are funded.
     /// - The `currentFundingIndex` is incremented by `n` or the remaining payments.
     /// - The principal of the funded payments is transferred from the liquidity provider to the beneficiary.
     function fundN(uint256 n) external returns (uint256);
@@ -191,13 +191,13 @@ interface ITinteroLoan is ITinteroLoanEvents, ITinteroLoanErrors {
     ///
     /// Requirements:
     ///
-    /// - The loan MUST be in FUNDED or DEFAULTED state.
+    /// - The loan MUST be in ONGOING or DEFAULTED state.
     /// - The sender MUST have enough funds to repay the principal of the specified payments
     /// - The sender MUST have approved this contract to transfer the principal amount
     ///
     /// Effects:
     ///
-    /// - Moves to FUNDED if paid until below the default threshold.
+    /// - Moves to ONGOING if paid until below the default threshold.
     /// - Moves to PAID state if all payments are repaid.
     /// - The `currentPaymentIndex` is incremented by `n` or the remaining payments.
     /// - The principal of the repaid payments is transferred from the sender to the receiver of each payment tranche

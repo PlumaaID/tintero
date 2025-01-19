@@ -69,6 +69,12 @@ contract Tintero is ERC4626, TinteroLoanFactory, IPaymentCallback {
     mapping(address loan => uint256 assets) private _lentTo;
     EnumerableSet.AddressSet private _loans;
 
+    /// @dev Reverts if the provided address is not a loan managed by this vault.
+    modifier onlyLoan(address loan) {
+        if (!isLoan(loan)) revert OnlyAuthorizedLoan();
+        _;
+    }
+
     /// @dev Constructor for Tintero.
     ///
     /// @param asset_ The ERC20 token to be lent.
@@ -137,10 +143,8 @@ contract Tintero is ERC4626, TinteroLoanFactory, IPaymentCallback {
     ///
     /// - Repaid (value is accrued through interest)
     /// - Repossesses (value is lost)
-    function onDebit(uint256 principal) external {
-        address loan = msg.sender;
-        if (!isLoan(loan)) revert OnlyAuthorizedLoan();
-        _lentTo[loan] -= principal;
+    function onDebit(uint256 principal) external onlyLoan(msg.sender) {
+        _lentTo[msg.sender] -= principal;
         _totalAssetsLent -= principal;
     }
 
@@ -181,9 +185,7 @@ contract Tintero is ERC4626, TinteroLoanFactory, IPaymentCallback {
         TinteroLoan loan,
         uint256[] calldata collateralTokenIds,
         PaymentLib.Payment[] calldata payment_
-    ) external restricted {
-        if (!isLoan(address(loan))) revert OnlyAuthorizedLoan();
-
+    ) external restricted onlyLoan(address(loan)) {
         loan.pushPayments(collateralTokenIds, payment_);
     }
 
@@ -196,9 +198,7 @@ contract Tintero is ERC4626, TinteroLoanFactory, IPaymentCallback {
         TinteroLoan loan,
         uint96[] calldata paymentIndexes,
         address[] calldata recipients
-    ) external restricted {
-        if (!isLoan(address(loan))) revert OnlyAuthorizedLoan();
-
+    ) external restricted onlyLoan(address(loan)) {
         loan.pushTranches(paymentIndexes, recipients);
     }
 
@@ -207,16 +207,16 @@ contract Tintero is ERC4626, TinteroLoanFactory, IPaymentCallback {
     /// Requirements:
     ///
     /// - The loan MUST be created by this vault.
-    function fundN(TinteroLoan loan, uint256 n) external restricted {
-        address loan_ = address(loan);
-        if (!isLoan(loan_)) revert OnlyAuthorizedLoan();
-
+    function fundN(
+        TinteroLoan loan,
+        uint256 n
+    ) external restricted onlyLoan(address(loan)) {
         IERC20Metadata asset_ = IERC20Metadata(asset());
         uint256 assetsBalance = asset_.balanceOf(address(this));
         loan.fundN(n);
         uint256 newAssetsBalance = asset_.balanceOf(address(this));
         uint256 totalPrincipalFunded = newAssetsBalance - assetsBalance;
-        _lentTo[loan_] += totalPrincipalFunded;
+        _lentTo[address(loan)] += totalPrincipalFunded;
         _totalAssetsLent += totalPrincipalFunded;
     }
 
@@ -229,12 +229,10 @@ contract Tintero is ERC4626, TinteroLoanFactory, IPaymentCallback {
         TinteroLoan loan,
         uint256 start,
         uint256 end
-    ) external restricted {
-        address loan_ = address(loan);
-        if (!isLoan(loan_)) revert OnlyAuthorizedLoan();
+    ) external restricted onlyLoan(address(loan)) {
         loan.repossess(start, end);
         // onERC721Received will update _lentTo and _totalAssetsLent
-        assert(_lentTo[loan_] == 0);
+        assert(_lentTo[address(loan)] == 0);
     }
 
     /**************************/
