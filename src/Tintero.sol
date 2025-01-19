@@ -226,14 +226,14 @@ contract Tintero is ERC4626, TinteroLoanFactory, IPaymentCallback {
     /// Requirements:
     ///
     /// - The loan MUST be created by this vault.
+    /// - The receiver must implement IERC721Receiver to receive the collateral.
     function repossess(
         TinteroLoan loan,
         uint256 start,
-        uint256 end
+        uint256 end,
+        address receiver
     ) external restricted onlyLoan(address(loan)) {
-        loan.repossess(start, end);
-        // onERC721Received will update _lentTo and _totalAssetsLent
-        assert(_lentTo[address(loan)] == 0);
+        loan.repossess(start, end, receiver);
     }
 
     /// @dev Upgrades a Loan contract to a new implementation. Calls Loan#upgradeToAndCall.

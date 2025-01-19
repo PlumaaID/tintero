@@ -21,9 +21,6 @@ interface ITinteroLoanErrors {
     /// @dev Only the beneficiary can perform the operation.
     error OnlyBeneficiary();
 
-    /// @dev The beneficiary address is not valid.
-    error InvalidBeneficiary();
-
     /// @dev The payments array doesn't match the collateral tokenIds array.
     error MismatchedPaymentCollateralIds();
 

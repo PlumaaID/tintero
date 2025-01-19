@@ -75,10 +75,6 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
     /// @param collateralAsset_ The ERC721 token used as collateral.
     /// @param beneficiary_ The address to receive the principal once funded.
     /// @param defaultThreshold_ The number of missed payments at which the loan defaults.
-    ///
-    /// Requirements:
-    ///
-    /// - The beneficiary MUST NOT be the liquidity provider or the zero address.
     function initialize(
         address liquidityProvider_,
         address collateralAsset_,
@@ -86,7 +82,6 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
         uint16 defaultThreshold_
     ) public initializer {
         LoanStorage storage $ = getTinteroLoanStorage();
-        if (beneficiary_ == address(0)) revert InvalidBeneficiary();
         $.liquidityProvider = liquidityProvider_;
         $.collateralAsset = collateralAsset_;
         $.beneficiary = beneficiary_;
@@ -160,10 +155,9 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
     ///
     /// - The loan MUST be in CREATED or FUNDING state.
     /// - There MUST be at least 1 tranche defined.
-    /// - The liquidityProvider MUST have enough funds to repay the principal of the current payment
+    /// - The caller MUST have enough funds to fund the payments
     /// - This contract mus have been approved to transfer the principal
-    ///   amount from the liquidity provider.
-    /// - Emits a `FundedPayment` event for each payment funded.
+    ///   amount from the caller.
     ///
     /// Effects:
     ///
@@ -171,8 +165,9 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
     /// - Moves to ONGOING state if all payments are funded.
     /// - The `currentFundingIndex` is incremented by `n` or the remaining payments.
     /// - The principal of the funded payments is transferred from the liquidity provider to the beneficiary.
+    /// - Emits a `FundedPayment` event for each payment funded.
     function fundN(uint256 n) external {
-        if (n == 0) return;
+        if (n == 0) return; // No-op
 
         // Checks
         if (totalTranches() <= 0) revert EmptyTranches();
@@ -186,7 +181,7 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
 
         // Interactions
         lendingAsset().safeTransferFrom(
-            address(liquidityProvider()),
+            address(msg.sender),
             beneficiary(),
             totalPrincipal
         );
@@ -230,6 +225,7 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
     /// - The loan MUST be in ONGOING or DEFAULTED state.
     /// - The sender MUST have enough funds to repay the principal of the specified payments
     /// - The sender MUST have approved this contract to transfer the principal amount
+    /// - The collateral MUST be owned by this contract.
     ///
     /// Effects:
     ///
@@ -261,15 +257,17 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
     /// - The loan MUST be in DEFAULTED or REPOSSESSED state.
     /// - The caller MUST be the liquidity provider.
     /// - The collateral MUST be owned by this contract.
+    /// - The receiver MUST implement IERC721Receiver to receive the collateral.
     ///
     /// Effects:
     ///
     /// - Moves to REPOSSESSED state.
-    /// - The collateral is transferred back to the liquidity provider.
+    /// - The collateral is transferred to the receiver.
     /// - Emits a `RepossessedPayment` event for each payment repossessed.
     function repossess(
         uint256 start,
-        uint256 end
+        uint256 end,
+        address receiver
     ) external onlyLiquidityProvider {
         LoanState state_ = _validateStateBitmap(
             _encodeStateBitmap(LoanState.DEFAULTED) |
@@ -277,7 +275,7 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
         );
 
         // Effects and Interactions
-        _repossess(state_, start, end);
+        _repossess(state_, start, end, receiver);
     }
 
     /**************************/
@@ -388,6 +386,11 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
     /// - The payment maturity date MUST NOT be before the latest maturity.
     /// - The payment MUST NOT have matured.
     /// - The collateral tokenId MUST not have been added before.
+    ///
+    /// Effects:
+    ///
+    /// - The `totalPayments` is incremented by 1.
+    /// - The `payment` function will return the added `_payment` after the current `totalPayments`.
     /// - Emits a `CreatedPayment` event.
     function _validatePushPayment(
         uint256 i,
@@ -420,6 +423,10 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
     /// - The collateralTokenIds MUST exist.
     /// - The owner of each collateral tokenId MUST have approved this contract
     ///   to transfer it (if not the contract itself).
+    ///
+    /// Effects:
+    ///
+    /// - The `collateralTokenIds` are transferred to this contract.
     function _collectCollateral(
         ERC721Burnable asset,
         uint256 tokenId
@@ -465,6 +472,10 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
 
     /// @dev Withdraws the collateral to the beneficiary.
     ///
+    /// Requirements:
+    ///
+    /// - Each payment collateral MUST be owned by this contract.
+    ///
     /// Effects:
     ///
     /// - Moves to CANCELED state.
@@ -482,13 +493,10 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
         // Interactions
         for (uint256 i = start; i < end; i++) {
             (uint256 tokenId, PaymentLib.Payment memory payment_) = payment(i);
-            collateralAsset().safeTransferFrom(
-                address(this),
-                beneficiary(),
-                tokenId
-            );
             emit WithdrawnPayment(i, tokenId, payment_.principal);
         }
+
+        _debitCollateral(start, end, beneficiary(), 0);
     }
 
     /// @dev Prepares the loan for repayment of `n` payments. Returns the total amount to pay.
@@ -528,12 +536,16 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
     ///
     /// - The sender MUST have enough funds to repay the principal of the specified payments
     /// - The sender MUST have approved this contract to transfer the principal amount
+    /// - The collateral MUST be owned by this contract.
     ///
     /// Effects:
     ///
+    /// - Moves to ONGOING if paid until below the default threshold.
+    /// - Moves to PAID state if all payments are repaid.
     /// - The `currentPaymentIndex` is incremented by `n` or the remaining payments.
     /// - The principal of the repaid payments is transferred from the sender to the receiver of each payment tranche
     /// - The collateral is transferred to the collateralReceiver if provided, otherwise it is burned.
+    /// - Emits a `RepaidPayment` event for each payment repaid.
     function _repay(
         uint256 start,
         uint256 end,
@@ -542,8 +554,7 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
         LoanStorage storage $ = getTinteroLoanStorage();
         $.currentPaymentIndex = end.toUint16();
         uint256 principalPaid = _repayByTranches(start, end);
-        liquidityProvider().onDebit(principalPaid);
-        _disposeCollateral(start, end, collateralReceiver);
+        _debitCollateral(start, end, collateralReceiver, principalPaid);
     }
 
     /// @dev Repossess the collateral from payments.
@@ -551,13 +562,19 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
     /// Requirements:
     ///
     /// - The collateral MUST be owned by this contract.
+    /// - The receiver MUST implement IERC721Receiver to receive the collateral.
     ///
     /// Effects:
     ///
     /// - Moves to REPOSSESSED state.
-    /// - The collateral is transferred back to the liquidity provider.
+    /// - The collateral is transferred to the receiver.
     /// - Emits a `RepossessedPayment` event for each payment repossessed.
-    function _repossess(LoanState state_, uint256 start, uint256 end) internal {
+    function _repossess(
+        LoanState state_,
+        uint256 start,
+        uint256 end,
+        address receiver
+    ) internal {
         // Repossess so it can't be paid anymore.
         if (state_ == LoanState.DEFAULTED)
             getTinteroLoanStorage()._repossessed = true;
@@ -567,20 +584,10 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
         for (uint256 i = start; i < end; i++) {
             (uint256 tokenId, PaymentLib.Payment memory payment_) = payment(i);
             principalRepossessed += payment_.principal;
-            // No need to update heldTokenIds since they can't be transferred back anymore
             emit RepossessedPayment(i, tokenId, payment_.principal);
         }
 
-        liquidityProvider().onDebit(principalRepossessed);
-
-        for (uint256 i = start; i < end; i++) {
-            (uint256 tokenId, ) = payment(i);
-            collateralAsset().safeTransferFrom(
-                address(this),
-                address(liquidityProvider()),
-                tokenId
-            );
-        }
+        _debitCollateral(start, end, receiver, principalRepossessed);
     }
 
     function _authorizeUpgrade(
@@ -627,6 +634,9 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
     /// Effects:
     ///
     /// - The principal of the repaid payments is transferred from the sender to the receiver of each payment tranche
+    /// - Moves to ONGOING if paid until below the default threshold.
+    /// - Moves to PAID state if all payments are repaid.
+    /// - Emits a `RepaidPayment` event for each payment repaid.
     function _repayByTranches(
         uint256 start,
         uint256 end
@@ -664,14 +674,20 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
 
     /// @dev Disposes the collateral from payments. Burns the collateral if `collateralReceiver` is the zero address.
     ///
+    /// Requirements:
+    ///
+    /// - Each payment collateral MUST be owned by this contract.
+    ///
     /// Effects:
     ///
     /// - The collateral is transferred to the collateralReceiver if provided, otherwise it is burned.
-    function _disposeCollateral(
+    function _debitCollateral(
         uint256 start,
         uint256 end,
-        address collateralReceiver
+        address collateralReceiver,
+        uint256 discountedPrincipal
     ) private {
+        liquidityProvider().onDebit(discountedPrincipal);
         for (uint256 i = start; i < end; i++) {
             (uint256 tokenId, ) = payment(i);
             if (collateralReceiver == address(0))

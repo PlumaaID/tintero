@@ -156,10 +156,9 @@ interface ITinteroLoan is ITinteroLoanEvents, ITinteroLoanErrors {
     ///
     /// - The loan MUST be in CREATED or FUNDING state.
     /// - There MUST be at least 1 tranche defined.
-    /// - The liquidityProvider MUST have enough funds to repay the principal of the current payment
+    /// - The caller MUST have enough funds to fund the payments
     /// - This contract mus have been approved to transfer the principal
-    ///   amount from the liquidity provider.
-    /// - Emits a `FundedPayment` event for each payment funded.
+    ///   amount from the caller.
     ///
     /// Effects:
     ///
@@ -167,6 +166,7 @@ interface ITinteroLoan is ITinteroLoanEvents, ITinteroLoanErrors {
     /// - Moves to ONGOING state if all payments are funded.
     /// - The `currentFundingIndex` is incremented by `n` or the remaining payments.
     /// - The principal of the funded payments is transferred from the liquidity provider to the beneficiary.
+    /// - Emits a `FundedPayment` event for each payment funded.
     function fundN(uint256 n) external;
 
     /// @dev Withdraws the collateral to the beneficiary.
@@ -194,6 +194,7 @@ interface ITinteroLoan is ITinteroLoanEvents, ITinteroLoanErrors {
     /// - The loan MUST be in ONGOING or DEFAULTED state.
     /// - The sender MUST have enough funds to repay the principal of the specified payments
     /// - The sender MUST have approved this contract to transfer the principal amount
+    /// - The collateral MUST be owned by this contract.
     ///
     /// Effects:
     ///
@@ -211,11 +212,13 @@ interface ITinteroLoan is ITinteroLoanEvents, ITinteroLoanErrors {
     ///
     /// - The loan MUST be in DEFAULTED or REPOSSESSED state.
     /// - The caller MUST be the liquidity provider.
+    /// - The collateral MUST be owned by this contract.
+    /// - The receiver MUST implement IERC721Receiver to receive the collateral.
     ///
     /// Effects:
     ///
     /// - Moves to REPOSSESSED state.
-    /// - The collateral is transferred back to the liquidity provider.
+    /// - The collateral is transferred to the receiver.
     /// - Emits a `RepossessedPayment` event for each payment repossessed.
-    function repossess(uint256 start, uint256 end) external;
+    function repossess(uint256 start, uint256 end, address receiver) external;
 }
