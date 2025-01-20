@@ -216,7 +216,7 @@ contract Tintero is ERC4626, TinteroLoanFactory, IPaymentCallback {
         uint256 assetsBalance = asset_.balanceOf(address(this));
         loan.fundN(n);
         uint256 newAssetsBalance = asset_.balanceOf(address(this));
-        uint256 totalPrincipalFunded = newAssetsBalance - assetsBalance;
+        uint256 totalPrincipalFunded = assetsBalance - newAssetsBalance;
         _lentTo[address(loan)] += totalPrincipalFunded;
         _totalAssetsLent += totalPrincipalFunded;
     }

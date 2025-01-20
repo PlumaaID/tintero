@@ -118,6 +118,7 @@ contract TinteroTest is BaseTest, ERC4626Test {
     ) public {
         vm.assume(caller != address(this));
         vm.assume(caller != address(0));
+        vm.assume(manager != address(this));
 
         PaymentLib.Payment[] memory payments = _mockPayments(6);
         uint256[] memory collateralTokenIds = _mockCollateralIds(6, caller);
@@ -188,6 +189,132 @@ contract TinteroTest is BaseTest, ERC4626Test {
             assertEq(endorser.ownerOf(collateralTokenIds[i]), loan);
     }
 
+    function testPushTranches(address manager) public {
+        vm.assume(manager != address(this));
+
+        address loan = _setupLoan();
+
+        uint96[] memory paymentIndexes = new uint96[](2);
+        address[] memory recipients = new address[](2);
+
+        paymentIndexes[0] = 1;
+        paymentIndexes[1] = 2;
+        recipients[0] = address(this);
+        recipients[1] = address(this);
+
+        // Must revert if the caller is not a manager (role not assigned yet)
+        vm.prank(manager);
+        vm.expectRevert();
+        tintero.pushTranches(TinteroLoan(loan), paymentIndexes, recipients);
+
+        // Grant manager role
+        accessManager.grantRole(TINTERO_MANAGER_ROLE, manager, 0);
+
+        // Manager pushes tranches
+        vm.prank(manager);
+        tintero.pushTranches(TinteroLoan(loan), paymentIndexes, recipients);
+
+        // Does not revert
+    }
+
+    function testFundN(address manager) public {
+        vm.assume(manager != address(this));
+
+        address loan = _setupLoan();
+
+        // Calculate total principal to be funded
+        uint256 totalPrincipal = 0;
+        for (uint256 i = 0; i < 3; i++) {
+            (, PaymentLib.Payment memory payment) = TinteroLoan(loan).payment(
+                i
+            );
+            totalPrincipal += payment.principal;
+        }
+
+        // Push tranches
+        uint96[] memory paymentIndexes = new uint96[](2);
+        address[] memory recipients = new address[](2);
+
+        paymentIndexes[0] = 1;
+        paymentIndexes[1] = 2;
+        recipients[0] = address(this);
+        recipients[1] = address(this);
+
+        // Must revert if the caller is not a manager (role not assigned yet)
+        vm.prank(manager);
+        vm.expectRevert();
+        tintero.pushTranches(TinteroLoan(loan), paymentIndexes, recipients);
+
+        // Grant manager role
+        accessManager.grantRole(TINTERO_MANAGER_ROLE, manager, 0);
+
+        // Adds liquidity to Tintero
+        _mintUSDCTo(address(this), 1000 * 10 ** 6);
+        usdc.approve(address(tintero), 1000 * 10 ** 6);
+        tintero.deposit(1000 * 10 ** 6, address(this));
+
+        uint256 tinteroAssetBalanceBefore = IERC20Metadata(tintero.asset())
+            .balanceOf(address(tintero));
+        uint256 reportedAssetsBefore = tintero.totalAssets();
+        uint256 totalAssetsBefore = tintero.totalAssetsLent();
+
+        // Fill the tranches and fund all payments payments
+        vm.startPrank(manager);
+        tintero.pushTranches(TinteroLoan(loan), paymentIndexes, recipients);
+        tintero.fundN(TinteroLoan(loan), 3);
+        vm.stopPrank();
+
+        // Actual assets are transferred to the loan
+        assertEq(
+            IERC20Metadata(tintero.asset()).balanceOf(address(tintero)),
+            tinteroAssetBalanceBefore - totalPrincipal
+        );
+        // Reported assets remain the same
+        assertEq(tintero.totalAssets(), reportedAssetsBefore);
+        // Total assets lent are updated
+        assertEq(tintero.totalAssetsLent(), totalAssetsBefore + totalPrincipal);
+        assertEq(tintero.lentTo(loan), totalPrincipal);
+    }
+
+    function _setupLoan() internal returns (address) {
+        PaymentLib.Payment[] memory payments = _mockPayments(3);
+        uint256[] memory collateralTokenIds = _mockCollateralIds(
+            3,
+            address(this)
+        );
+
+        PaymentLib.Payment[] memory firstPayments = new PaymentLib.Payment[](3);
+        uint256[] memory firstCollateralIds = new uint256[](3);
+        for (uint256 i = 0; i < firstPayments.length; i++) {
+            firstPayments[i] = payments[i];
+            firstCollateralIds[i] = collateralTokenIds[i];
+        }
+
+        // User predicts the loan address before creating it (so that it can approve, for example)
+        (address loan, , ) = tintero.predictLoanAddress(
+            address(endorser),
+            beneficiary,
+            3,
+            bytes32(0),
+            address(this)
+        );
+
+        // Approve the loan to operate their tokens
+        endorser.setApprovalForAll(loan, true);
+
+        // Execute loan request
+        tintero.requestLoan(
+            address(endorser),
+            beneficiary,
+            3,
+            firstPayments,
+            firstCollateralIds,
+            bytes32(0)
+        );
+
+        return loan;
+    }
+
     function _mockPayments(
         uint256 n
     ) internal view returns (PaymentLib.Payment[] memory) {
@@ -212,7 +339,7 @@ contract TinteroTest is BaseTest, ERC4626Test {
         uint256[] memory collateralTokenIds = new uint256[](n);
         for (uint256 i = 0; i < collateralTokenIds.length; i++) {
             collateralTokenIds[i] = i;
-            endorser.$_safeMint(owner, i);
+            endorser.$_mint(owner, i);
         }
         return collateralTokenIds;
     }

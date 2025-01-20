@@ -145,6 +145,7 @@ interface ITinteroLoan is ITinteroLoanEvents, ITinteroLoanErrors {
     /// - The `tranche` function will return the added tranches at their corresponding
     ///   indexes starting at `totalTranches`.
     /// - The tranches are added to the loan.
+    /// - Emits a `CreatedTranche` event for each tranche added.
     function pushTranches(
         uint96[] calldata paymentIndexes,
         address[] calldata recipients

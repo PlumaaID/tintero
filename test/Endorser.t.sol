@@ -25,7 +25,7 @@ contract EndorserTest is BaseTest {
     }
 
     function testTokenURI(uint256 tokenId) public {
-        endorser.$_safeMint(address(0xdeadbeef), tokenId);
+        endorser.$_mint(address(0xdeadbeef), tokenId);
         assertEq(
             endorser.tokenURI(tokenId),
             string.concat(

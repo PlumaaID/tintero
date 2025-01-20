@@ -19,6 +19,7 @@ interface IUSDC {
         uint256 minterAllowedAmount
     ) external;
     function masterMinter() external view returns (address);
+    function approve(address spender, uint256 amount) external returns (bool);
     function initialize(
         string memory tokenName,
         string memory tokenSymbol,
@@ -49,15 +50,16 @@ contract USDCTest is Test {
                 address(this),
                 address(this)
             );
-        } else {
-            // spoof .configureMinter() call with the master minter account
-            vm.prank(usdc.masterMinter());
-            // allow this test contract to mint USDC
-            usdc.configureMinter(address(this), type(uint256).max);
+        } else _mintUSDCTo(address(this), 1000e6);
+    }
 
-            // mint $1000 USDC to the test contract (or an external user)
-            usdc.mint(address(this), 1000e6);
-        }
+    function _mintUSDCTo(address to, uint256 amount) internal {
+        // spoof .configureMinter() call with the master minter account
+        vm.prank(usdc.masterMinter());
+        // allow this test contract to mint USDC
+        usdc.configureMinter(address(this), type(uint256).max);
+        // mint to the test contract (or an external user)
+        usdc.mint(to, amount);
     }
 
     bytes private _usdcImplCode =

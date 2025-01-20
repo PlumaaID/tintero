@@ -141,6 +141,7 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
     /// - The `tranche` function will return the added tranches at their corresponding
     ///   indexes starting at `totalTranches`.
     /// - The tranches are added to the loan.
+    /// - Emits a `CreatedTranche` event for each tranche added.
     function pushTranches(
         uint96[] calldata paymentIndexes,
         address[] calldata recipients
@@ -351,6 +352,7 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
     /// - The `tranche` function will return the added tranches at their corresponding
     ///   indexes starting at `totalTranches`.
     /// - The tranches are added to the loan.
+    /// - Emits a `CreatedTranche` event for each tranche added.
     function _validateAndPushTranches(
         uint96[] calldata paymentIndexes_,
         address[] calldata recipients_
@@ -363,7 +365,7 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
         // Effects
         LoanStorage storage $ = getTinteroLoanStorage();
         uint256 totalTranches_ = totalTranches();
-        uint96 lastIndex = 1; // Avoids 0 index so that the first tranche is always valid
+        uint96 lastIndex = 0;
         for (uint256 i = 0; i < paymentIndexesLength; i++) {
             uint96 paymentIndex = paymentIndexes_[i];
             if (paymentIndex <= lastIndex)
