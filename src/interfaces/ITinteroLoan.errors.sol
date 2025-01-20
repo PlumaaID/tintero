@@ -18,6 +18,9 @@ interface ITinteroLoanErrors {
     /// @dev Only the liquidity provider can perform the operation.
     error OnlyLiquidityProvider();
 
+    /// @dev The beneficiary address is not valid.
+    error InvalidBeneficiary();
+
     /// @dev Only the beneficiary can perform the operation.
     error OnlyBeneficiary();
 

@@ -81,6 +81,7 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
         address beneficiary_,
         uint16 defaultThreshold_
     ) public initializer {
+        if (beneficiary_ == address(0)) revert InvalidBeneficiary();
         LoanStorage storage $ = getTinteroLoanStorage();
         $.liquidityProvider = liquidityProvider_;
         $.collateralAsset = collateralAsset_;
@@ -378,7 +379,7 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
             );
         }
 
-        if (totalTranches() >= totalPayments()) revert TooManyTranches();
+        if (totalTranches() > totalPayments()) revert TooManyTranches();
     }
 
     /// @dev Validates the payment and adds it to the loan.
@@ -502,6 +503,7 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
     }
 
     /// @dev Prepares the loan for repayment of `n` payments. Returns the total amount to pay.
+    /// Assumes end is not greater than the total number of payments.
     ///
     /// Effects:
     ///
@@ -627,6 +629,7 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
     }
 
     /// @dev Repays the payments from `start` to `end` by doing a single transfer per tranche.
+    /// Assumes end is not greater than the total number of payments.
     ///
     /// Requirements:
     ///
@@ -655,7 +658,7 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
         address nextTrancheReceiver_;
 
         while (start < end) {
-            assert(tranchePaymentIndex_ < totalTranches_);
+            assert(tranchePaymentIndex_ <= totalTranches_);
             (nextTranchePaymentIndex_, nextTrancheReceiver_) = tranche(
                 ++trancheIndex_ // Next tranche
             );

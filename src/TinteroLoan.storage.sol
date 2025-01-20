@@ -14,7 +14,7 @@ abstract contract TinteroLoanStorage is ITinteroLoan {
 
     struct LoanStorage {
         address liquidityProvider;
-        // Invariant: _tranches.length() <= payments.length - 1
+        // Invariant: _tranches.length() <= payments.length
         Checkpoints.Trace160 _tranches; // paymentIndex << 160 | recipient
         bool _canceled;
         bool _repossessed;

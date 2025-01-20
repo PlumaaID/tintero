@@ -54,57 +54,75 @@ contract TinteroTest is BaseTest, ERC4626Test {
         assertEq(tintero.authority(), address(accessManager));
     }
 
-    function testRequestLoan(address caller, bytes32 salt) public {
-        vm.assume(caller != address(this));
-        vm.assume(caller != address(0));
+    function testRequestLoan(
+        address borrower,
+        address beneficiary,
+        bytes32 salt,
+        uint16 nPayments
+    ) public {
+        vm.assume(nPayments <= 300);
 
-        PaymentLib.Payment[] memory payments = _mockPayments(3);
-        uint256[] memory collateralTokenIds = _mockCollateralIds(3, caller);
+        vm.assume(borrower != address(this));
 
-        // User predicts the loan address before creating it (so that it can approve, for example)
-        (address loan, , ) = tintero.predictLoanAddress(
-            address(endorser),
-            beneficiary,
-            3,
-            salt,
-            caller
-        );
+        // Can't be 0 or transfer will fail
+        vm.assume(borrower != address(0));
+        vm.assume(beneficiary != address(0));
 
-        vm.startPrank(caller);
-
-        // The caller approves the loan to operate their tokens
-        endorser.setApprovalForAll(loan, true);
-
-        // Loan event must be emitted
-        vm.expectEmit(address(tintero));
-        emit TinteroLoanFactory.LoanCreated(loan);
-
-        // Execute loan request
-        tintero.requestLoan(
-            address(endorser),
-            beneficiary,
-            3,
-            payments,
-            collateralTokenIds,
-            salt
-        );
+        // Any borrower can request a loan to any beneficiary
+        (
+            ,
+            address loan,
+            PaymentLib.Payment[] memory payments,
+            uint256[] memory collateralTokenIds
+        ) = _requestLoan(borrower, beneficiary, salt, nPayments);
 
         // Loan is added to the management list
         assertTrue(tintero.isLoan(loan));
 
-        vm.stopPrank();
+        // Check payments and calculate total principal to be funded
+        uint256 totalPrincipal = 0;
+        for (uint256 i = 0; i < payments.length; i++) {
+            (
+                uint256 collateralTokenId,
+                PaymentLib.Payment memory payment
+            ) = TinteroLoan(loan).payment(i);
+            totalPrincipal += payment.principal;
+            assertEq(collateralTokenId, collateralTokenIds[i]);
+            assertEq(payment.creation, payments[i].creation);
+            assertEq(payment.creation, uint48(block.timestamp));
+            assertEq(payment.maturityPeriod, payments[i].maturityPeriod);
+            assertEq(payment.gracePeriod, payments[i].gracePeriod);
+            assertEq(payment.interestRate, payments[i].interestRate);
+            assertEq(payment.premiumRate, payments[i].premiumRate);
+        }
 
-        // Collateral tokens are transferred to the loan
-        for (uint256 i = 0; i < collateralTokenIds.length; i++)
-            assertEq(endorser.ownerOf(collateralTokenIds[i]), loan);
+        // Check state consistency
+        assertEq(TinteroLoan(loan).totalPayments(), nPayments);
+        assertEq(TinteroLoan(loan).currentPaymentIndex(), 0);
+        if (nPayments > 0) {
+            (
+                uint256 currentCollateralId,
+                PaymentLib.Payment memory currentPayment
+            ) = TinteroLoan(loan).currentPayment();
+            assertEq(currentCollateralId, collateralTokenIds[0]);
+            assertEq(currentPayment.creation, payments[0].creation);
+            assertEq(currentPayment.maturityPeriod, payments[0].maturityPeriod);
+            assertEq(currentPayment.gracePeriod, payments[0].gracePeriod);
+            assertEq(currentPayment.interestRate, payments[0].interestRate);
+            assertEq(currentPayment.premiumRate, payments[0].premiumRate);
+
+            // Collateral tokens are transferred to the loan
+            for (uint256 i = 0; i < collateralTokenIds.length; i++)
+                assertEq(endorser.ownerOf(collateralTokenIds[i]), loan);
+        }
 
         // Fails creating the loan again
-        vm.startPrank(caller);
+        vm.startPrank(borrower);
         vm.expectRevert(Tintero.DuplicatedLoan.selector);
         tintero.requestLoan(
             address(endorser),
             beneficiary,
-            3,
+            nPayments,
             payments,
             collateralTokenIds,
             salt
@@ -112,59 +130,42 @@ contract TinteroTest is BaseTest, ERC4626Test {
     }
 
     function testPushPayments(
-        address caller,
+        address borrower,
+        address beneficiary,
         address manager,
-        bytes32 salt
+        address fakeLoan,
+        bytes32 salt,
+        uint16 nPayments,
+        uint256 nExtraPayments
     ) public {
-        vm.assume(caller != address(this));
-        vm.assume(caller != address(0));
+        vm.assume(nPayments <= 300);
+        vm.assume(nExtraPayments <= 300);
+
+        vm.assume(borrower != address(this));
         vm.assume(manager != address(this));
 
-        PaymentLib.Payment[] memory payments = _mockPayments(6);
-        uint256[] memory collateralTokenIds = _mockCollateralIds(6, caller);
+        // Can't be 0 or transfer will fail
+        vm.assume(borrower != address(0));
+        vm.assume(beneficiary != address(0));
 
-        PaymentLib.Payment[] memory firstPayments = new PaymentLib.Payment[](3);
-        uint256[] memory firstCollateralIds = new uint256[](3);
-        for (uint256 i = 0; i < firstPayments.length; i++) {
-            firstPayments[i] = payments[i];
-            firstCollateralIds[i] = collateralTokenIds[i];
-        }
+        (
+            ,
+            address loan,
+            PaymentLib.Payment[] memory payments,
+            uint256[] memory collateralTokenIds
+        ) = _requestLoan(borrower, beneficiary, salt, nPayments);
 
-        // User predicts the loan address before creating it (so that it can approve, for example)
-        (address loan, , ) = tintero.predictLoanAddress(
-            address(endorser),
-            beneficiary,
-            3,
-            salt,
-            caller
+        PaymentLib.Payment[] memory lastPayments = _mockPayments(
+            nPayments,
+            nExtraPayments
+        );
+        uint256[] memory lastCollateralIds = _mockCollateralIds(
+            nPayments,
+            nExtraPayments,
+            borrower
         );
 
-        vm.startPrank(caller);
-
-        // The caller approves the loan to operate their tokens
-        endorser.setApprovalForAll(loan, true);
-
-        // Execute loan request
-        tintero.requestLoan(
-            address(endorser),
-            beneficiary,
-            3,
-            firstPayments,
-            firstCollateralIds,
-            salt
-        );
-
-        // Push payments
-        PaymentLib.Payment[] memory lastPayments = new PaymentLib.Payment[](3);
-        uint256[] memory lastCollateralIds = new uint256[](3);
-        for (uint256 i = 0; i < lastPayments.length; i++) {
-            lastPayments[i] = payments[i + 3];
-            lastCollateralIds[i] = collateralTokenIds[i + 3];
-        }
-
-        vm.stopPrank();
-
-        // Must revert if the caller is not a manager (role not assigned yet)
+        // Must revert if the borrower is not a manager (role not assigned yet)
         vm.prank(manager);
         vm.expectRevert();
         tintero.pushPayments(
@@ -175,6 +176,15 @@ contract TinteroTest is BaseTest, ERC4626Test {
 
         // Grant manager role
         accessManager.grantRole(TINTERO_MANAGER_ROLE, manager, 0);
+
+        // Must revert if the address is not a loan
+        vm.prank(manager);
+        vm.expectRevert();
+        tintero.pushPayments(
+            TinteroLoan(fakeLoan),
+            collateralTokenIds,
+            lastPayments
+        );
 
         // Manager pushes extra payments
         vm.prank(manager);
@@ -187,86 +197,221 @@ contract TinteroTest is BaseTest, ERC4626Test {
         // Collateral tokens are transferred to the loan
         for (uint256 i = 0; i < collateralTokenIds.length; i++)
             assertEq(endorser.ownerOf(collateralTokenIds[i]), loan);
+        for (uint256 i = 0; i < lastCollateralIds.length; i++)
+            assertEq(endorser.ownerOf(lastCollateralIds[i]), loan);
+
+        // Check payments
+        for (uint256 i = 0; i < payments.length; i++) {
+            (
+                uint256 collateralTokenId,
+                PaymentLib.Payment memory payment
+            ) = TinteroLoan(loan).payment(i);
+            assertEq(collateralTokenId, collateralTokenIds[i]);
+            assertEq(payment.creation, payments[i].creation);
+            assertEq(payment.creation, uint48(block.timestamp));
+            assertEq(payment.maturityPeriod, payments[i].maturityPeriod);
+            assertEq(payment.gracePeriod, payments[i].gracePeriod);
+            assertEq(payment.interestRate, payments[i].interestRate);
+            assertEq(payment.premiumRate, payments[i].premiumRate);
+        }
+
+        // Check state consistency
+        assertEq(TinteroLoan(loan).totalPayments(), nPayments + nExtraPayments);
+        assertEq(TinteroLoan(loan).currentPaymentIndex(), 0);
+        if (nPayments + nExtraPayments > 0) {
+            (
+                uint256 currentCollateralId,
+                PaymentLib.Payment memory currentPayment
+            ) = TinteroLoan(loan).currentPayment();
+            if (nPayments > 0) {
+                // Payments were added first
+                assertEq(currentCollateralId, collateralTokenIds[0]);
+                assertEq(currentPayment.creation, payments[0].creation);
+                assertEq(
+                    currentPayment.maturityPeriod,
+                    payments[0].maturityPeriod
+                );
+                assertEq(currentPayment.gracePeriod, payments[0].gracePeriod);
+                assertEq(currentPayment.interestRate, payments[0].interestRate);
+                assertEq(currentPayment.premiumRate, payments[0].premiumRate);
+            } else {
+                // First payments list is empty
+                assertEq(currentCollateralId, lastCollateralIds[0]);
+                assertEq(currentPayment.creation, lastPayments[0].creation);
+                assertEq(
+                    currentPayment.maturityPeriod,
+                    lastPayments[0].maturityPeriod
+                );
+                assertEq(
+                    currentPayment.gracePeriod,
+                    lastPayments[0].gracePeriod
+                );
+                assertEq(
+                    currentPayment.interestRate,
+                    lastPayments[0].interestRate
+                );
+                assertEq(
+                    currentPayment.premiumRate,
+                    lastPayments[0].premiumRate
+                );
+            }
+        }
     }
 
-    function testPushTranches(address manager) public {
+    function testPushTranches(
+        address borrower,
+        address beneficiary,
+        address manager,
+        address fakeLoan,
+        bytes32 salt,
+        uint16 nPayments,
+        uint16 nTranches,
+        address trancheRecipient
+    ) public {
+        vm.assume(nTranches <= nPayments);
+        vm.assume(nPayments <= 300);
+
+        vm.assume(borrower != address(this));
         vm.assume(manager != address(this));
 
-        address loan = _setupLoan();
+        // Can't be 0 or transfer will fail
+        vm.assume(borrower != address(0));
+        vm.assume(beneficiary != address(0));
 
-        uint96[] memory paymentIndexes = new uint96[](2);
-        address[] memory recipients = new address[](2);
+        (, address loan, , ) = _requestLoan(
+            borrower,
+            beneficiary,
+            salt,
+            nPayments
+        );
 
-        paymentIndexes[0] = 1;
-        paymentIndexes[1] = 2;
-        recipients[0] = address(this);
-        recipients[1] = address(this);
+        uint96[] memory paymentIndexes = new uint96[](nTranches);
+        address[] memory recipients = new address[](nTranches);
+        for (uint256 i = 0; i < nTranches; i++) {
+            paymentIndexes[i] = uint96(i + 1);
+            recipients[i] = trancheRecipient;
+        }
 
-        // Must revert if the caller is not a manager (role not assigned yet)
+        // Must revert if the borrower is not a manager (role not assigned yet)
         vm.prank(manager);
         vm.expectRevert();
         tintero.pushTranches(TinteroLoan(loan), paymentIndexes, recipients);
 
         // Grant manager role
         accessManager.grantRole(TINTERO_MANAGER_ROLE, manager, 0);
+
+        // Must revert if the address is not a loan
+        vm.prank(manager);
+        vm.expectRevert();
+        tintero.pushTranches(TinteroLoan(fakeLoan), paymentIndexes, recipients);
 
         // Manager pushes tranches
         vm.prank(manager);
         tintero.pushTranches(TinteroLoan(loan), paymentIndexes, recipients);
 
-        // Does not revert
-    }
-
-    function testFundN(address manager) public {
-        vm.assume(manager != address(this));
-
-        address loan = _setupLoan();
-
-        // Calculate total principal to be funded
-        uint256 totalPrincipal = 0;
-        for (uint256 i = 0; i < 3; i++) {
-            (, PaymentLib.Payment memory payment) = TinteroLoan(loan).payment(
-                i
-            );
-            totalPrincipal += payment.principal;
+        // Check tranches
+        for (uint256 i = 0; i < paymentIndexes.length; i++) {
+            (uint96 paymentIndex, address recipient) = TinteroLoan(loan)
+                .tranche(i);
+            assertEq(paymentIndex, paymentIndexes[i]);
+            assertEq(recipient, recipients[i]);
         }
 
-        // Push tranches
-        uint96[] memory paymentIndexes = new uint96[](2);
-        address[] memory recipients = new address[](2);
+        // Check state consistency
+        assertEq(TinteroLoan(loan).totalTranches(), nTranches);
+        assertEq(TinteroLoan(loan).currentTrancheIndex(), 0);
+        if (nTranches > 0) {
+            (
+                uint96 currentPaymentIndex,
+                address currentRecipient
+            ) = TinteroLoan(loan).currentTranche();
+            assertEq(currentPaymentIndex, paymentIndexes[0]);
+            assertEq(currentRecipient, recipients[0]);
+        }
+    }
 
-        paymentIndexes[0] = 1;
-        paymentIndexes[1] = 2;
-        recipients[0] = address(this);
-        recipients[1] = address(this);
+    function testFundN(
+        address borrower,
+        address beneficiary,
+        address manager,
+        address fakeLoan,
+        uint16 nPayments,
+        uint16 nTranches,
+        address trancheRecipient
+    ) public {
+        vm.assume(nPayments <= 300);
+        nTranches = uint16(bound(nTranches, 1, 300));
+        vm.assume(nTranches <= nPayments);
 
-        // Must revert if the caller is not a manager (role not assigned yet)
-        vm.prank(manager);
-        vm.expectRevert();
-        tintero.pushTranches(TinteroLoan(loan), paymentIndexes, recipients);
+        vm.assume(borrower != address(this));
+        vm.assume(manager != address(this));
 
-        // Grant manager role
-        accessManager.grantRole(TINTERO_MANAGER_ROLE, manager, 0);
+        // Can't be 0 or transfer will fail
+        vm.assume(borrower != address(0));
+        vm.assume(beneficiary != address(0));
 
-        // Adds liquidity to Tintero
-        _mintUSDCTo(address(this), 1000 * 10 ** 6);
-        usdc.approve(address(tintero), 1000 * 10 ** 6);
-        tintero.deposit(1000 * 10 ** 6, address(this));
+        (uint256 totalPrincipal, address loan, , ) = _requestLoan(
+            borrower,
+            beneficiary,
+            bytes32(0),
+            nPayments
+        );
 
-        uint256 tinteroAssetBalanceBefore = IERC20Metadata(tintero.asset())
-            .balanceOf(address(tintero));
+        // Avoid stack too deep error
+        {
+            uint96[] memory paymentIndexes = new uint96[](nTranches);
+            address[] memory recipients = new address[](nTranches);
+            for (uint256 i = 0; i < nTranches; i++) {
+                paymentIndexes[i] = uint96(i + 1);
+                recipients[i] = trancheRecipient;
+            }
+            // Must revert if the borrower is not a manager (role not assigned yet)
+            vm.prank(manager);
+            vm.expectRevert();
+            tintero.pushTranches(TinteroLoan(loan), paymentIndexes, recipients);
+
+            // Grant manager role
+            accessManager.grantRole(TINTERO_MANAGER_ROLE, manager, 0);
+
+            // Adds liquidity to Tintero
+            uint256 amount = 1000 * 10 ** 6;
+            _mintUSDCTo(address(this), amount);
+            usdc.approve(address(tintero), amount);
+            tintero.deposit(amount, address(this));
+
+            // Fill the tranches
+            vm.prank(manager);
+            tintero.pushTranches(TinteroLoan(loan), paymentIndexes, recipients);
+
+            // Must revert if the address is not a loan
+            vm.prank(manager);
+            vm.expectRevert();
+            tintero.pushTranches(
+                TinteroLoan(fakeLoan),
+                paymentIndexes,
+                recipients
+            );
+        }
+        IERC20Metadata asset_ = IERC20Metadata(tintero.asset());
+
+        uint256 tinteroAssetBalanceBefore = asset_.balanceOf(address(tintero));
+        uint256 beneficiaryAssetBalanceBefore = asset_.balanceOf(beneficiary);
         uint256 reportedAssetsBefore = tintero.totalAssets();
         uint256 totalAssetsBefore = tintero.totalAssetsLent();
 
-        // Fill the tranches and fund all payments payments
-        vm.startPrank(manager);
-        tintero.pushTranches(TinteroLoan(loan), paymentIndexes, recipients);
-        tintero.fundN(TinteroLoan(loan), 3);
-        vm.stopPrank();
+        {
+            // Fund all payments
+            vm.prank(manager);
+            tintero.fundN(TinteroLoan(loan), nPayments);
+        }
 
-        // Actual assets are transferred to the loan
+        // Actual assets are transferred to the beneficiary
         assertEq(
-            IERC20Metadata(tintero.asset()).balanceOf(address(tintero)),
+            asset_.balanceOf(beneficiary),
+            beneficiaryAssetBalanceBefore + totalPrincipal
+        );
+        assertEq(
+            asset_.balanceOf(address(tintero)),
             tinteroAssetBalanceBefore - totalPrincipal
         );
         // Reported assets remain the same
@@ -276,55 +421,71 @@ contract TinteroTest is BaseTest, ERC4626Test {
         assertEq(tintero.lentTo(loan), totalPrincipal);
     }
 
-    function _setupLoan() internal returns (address) {
-        PaymentLib.Payment[] memory payments = _mockPayments(3);
-        uint256[] memory collateralTokenIds = _mockCollateralIds(
-            3,
-            address(this)
-        );
-
-        PaymentLib.Payment[] memory firstPayments = new PaymentLib.Payment[](3);
-        uint256[] memory firstCollateralIds = new uint256[](3);
-        for (uint256 i = 0; i < firstPayments.length; i++) {
-            firstPayments[i] = payments[i];
-            firstCollateralIds[i] = collateralTokenIds[i];
-        }
+    function _requestLoan(
+        address borrower,
+        address beneficiary,
+        bytes32 salt,
+        uint16 nPayments
+    )
+        internal
+        returns (
+            uint256 totalPrincipal,
+            address loan,
+            PaymentLib.Payment[] memory payments,
+            uint256[] memory collateralTokenIds
+        )
+    {
+        payments = _mockPayments(0, nPayments);
+        collateralTokenIds = _mockCollateralIds(0, nPayments, borrower);
 
         // User predicts the loan address before creating it (so that it can approve, for example)
-        (address loan, , ) = tintero.predictLoanAddress(
+        (loan, , ) = tintero.predictLoanAddress(
             address(endorser),
             beneficiary,
-            3,
-            bytes32(0),
-            address(this)
+            nPayments,
+            salt,
+            borrower
         );
+
+        vm.startPrank(borrower);
 
         // Approve the loan to operate their tokens
         endorser.setApprovalForAll(loan, true);
+
+        // Loan event must be emitted
+        vm.expectEmit(address(tintero));
+        emit TinteroLoanFactory.LoanCreated(loan);
 
         // Execute loan request
         tintero.requestLoan(
             address(endorser),
             beneficiary,
-            3,
-            firstPayments,
-            firstCollateralIds,
-            bytes32(0)
+            nPayments,
+            payments,
+            collateralTokenIds,
+            salt
         );
 
-        return loan;
+        vm.stopPrank();
+
+        // Calculate total principal
+        for (uint256 i = 0; i < payments.length; i++)
+            totalPrincipal += payments[i].principal;
     }
 
     function _mockPayments(
+        uint256 start,
         uint256 n
     ) internal view returns (PaymentLib.Payment[] memory) {
         PaymentLib.Payment[] memory payments = new PaymentLib.Payment[](n);
         for (uint256 i = 0; i < payments.length; i++) {
+            uint32 maturityPeriod = uint32((start + i + 1) * 1 days);
+            uint32 gracePeriod = uint32((start + i + 2) * 1 days);
             payments[i] = PaymentLib.Payment(
-                100 * (i + 1),
+                100 * (start + i + 1),
                 uint48(block.timestamp),
-                60 days, // 60 days maturity period
-                30 days, // 30 days grace period
+                maturityPeriod,
+                gracePeriod,
                 12 * (10 ** 4), // 12% regular interest
                 18 * (10 ** 4) // 18% premium interest
             );
@@ -333,13 +494,14 @@ contract TinteroTest is BaseTest, ERC4626Test {
     }
 
     function _mockCollateralIds(
+        uint256 start,
         uint256 n,
         address owner
     ) internal returns (uint256[] memory) {
         uint256[] memory collateralTokenIds = new uint256[](n);
         for (uint256 i = 0; i < collateralTokenIds.length; i++) {
-            collateralTokenIds[i] = i;
-            endorser.$_mint(owner, i);
+            collateralTokenIds[i] = start + i;
+            endorser.$_mint(owner, start + i);
         }
         return collateralTokenIds;
     }
