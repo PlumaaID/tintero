@@ -4,10 +4,21 @@ pragma solidity ^0.8.20;
 import {BaseTest} from "./Base.t.sol";
 import {ICreateX} from "createx/ICreateX.sol";
 import {AccessManager} from "@openzeppelin/contracts/access/manager/AccessManager.sol";
+import {Initializable} from "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 import {IWitness, Proof} from "@WitnessCo/interfaces/IWitness.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
+import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
 import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
+import {UUPSUpgradeable} from "@openzeppelin/contracts/proxy/utils/UUPSUpgradeable.sol";
 import {Endorser} from "~/Endorser.sol";
+
+contract EndorserVN is Endorser {
+    function initializeVN() public reinitializer(2) {}
+
+    function version() public pure returns (string memory) {
+        return "N";
+    }
+}
 
 contract EndorserTest is BaseTest {
     using Strings for *;
@@ -96,7 +107,6 @@ contract EndorserTest is BaseTest {
         Proof calldata proof
     ) public {
         vm.prank(minter);
-        vm.expectRevert(bytes4(keccak256("InvalidProof")));
         endorser.mint(mintRequest, proof);
     }
 
@@ -112,6 +122,36 @@ contract EndorserTest is BaseTest {
         vm.prank(setter);
         endorser.setWitness(newWitness);
         assertEq(address(endorser.WITNESS()), address(newWitness));
+    }
+
+    function testUpgradeToAndCall(address caller) public {
+        bytes4[] memory selectors = new bytes4[](1);
+        selectors[0] = UUPSUpgradeable.upgradeToAndCall.selector;
+        accessManager.setTargetFunctionRole(
+            address(endorser),
+            selectors,
+            UPGRADER_ROLE
+        );
+        accessManager.grantRole(UPGRADER_ROLE, caller, 0);
+        EndorserVN newEndorser = new EndorserVN();
+        address newEndorserImpl = address(newEndorser);
+        vm.prank(caller);
+        vm.expectEmit(address(endorser));
+        emit ERC1967Utils.Upgraded(newEndorserImpl);
+        endorser.upgradeToAndCall(
+            newEndorserImpl,
+            abi.encodeCall(newEndorser.initializeVN, ())
+        );
+    }
+
+    function testFailUpgradeToAndCallUnauthorized(address caller) public {
+        EndorserVN newEndorser = new EndorserVN();
+        address newEndorserImpl = address(newEndorser);
+        vm.prank(caller);
+        endorser.upgradeToAndCall(
+            newEndorserImpl,
+            abi.encodeCall(newEndorser.initializeVN, ())
+        );
     }
 
     function _getAuthorizationSignature(

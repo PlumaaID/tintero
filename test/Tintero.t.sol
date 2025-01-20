@@ -399,6 +399,7 @@ contract TinteroTest is BaseTest, ERC4626Test {
         uint256 reportedAssetsBefore = tintero.totalAssets();
         uint256 totalAssetsBefore = tintero.totalAssetsLent();
 
+        // Avoid stack too deep error
         {
             // Fund all payments
             vm.prank(manager);
