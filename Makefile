@@ -17,9 +17,9 @@ update:; forge update
 
 build:; forge build
 
-test: clean; forge test
+test:; forge test
 
-snapshot: clean; forge snapshot
+snapshot:; forge snapshot
 
 format:; forge fmt
 

@@ -9,7 +9,6 @@ import {IWitness, Proof} from "@WitnessCo/interfaces/IWitness.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
 import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
-import {UUPSUpgradeable} from "@openzeppelin/contracts/proxy/utils/UUPSUpgradeable.sol";
 import {Endorser} from "~/Endorser.sol";
 
 contract EndorserVN is Endorser {
@@ -101,23 +100,17 @@ contract EndorserTest is BaseTest {
         endorser.mint(mintRequest, mockProof);
     }
 
-    function testFailMintRequest(
+    function testRevertMintRequest(
         address minter,
         Endorser.MintRequestData calldata mintRequest,
         Proof calldata proof
     ) public {
         vm.prank(minter);
+        vm.expectRevert();
         endorser.mint(mintRequest, proof);
     }
 
     function testSetWitness(IWitness newWitness, address setter) public {
-        bytes4[] memory selectors = new bytes4[](1);
-        selectors[0] = Endorser.setWitness.selector;
-        accessManager.setTargetFunctionRole(
-            address(endorser),
-            selectors,
-            WITNESS_SETTER_ROLE
-        );
         accessManager.grantRole(WITNESS_SETTER_ROLE, setter, 0);
         vm.prank(setter);
         endorser.setWitness(newWitness);
@@ -125,13 +118,6 @@ contract EndorserTest is BaseTest {
     }
 
     function testUpgradeToAndCall(address caller) public {
-        bytes4[] memory selectors = new bytes4[](1);
-        selectors[0] = UUPSUpgradeable.upgradeToAndCall.selector;
-        accessManager.setTargetFunctionRole(
-            address(endorser),
-            selectors,
-            UPGRADER_ROLE
-        );
         accessManager.grantRole(UPGRADER_ROLE, caller, 0);
         EndorserVN newEndorser = new EndorserVN();
         address newEndorserImpl = address(newEndorser);
@@ -144,10 +130,11 @@ contract EndorserTest is BaseTest {
         );
     }
 
-    function testFailUpgradeToAndCallUnauthorized(address caller) public {
+    function testRevertUpgradeToAndCallUnauthorized(address caller) public {
         EndorserVN newEndorser = new EndorserVN();
         address newEndorserImpl = address(newEndorser);
         vm.prank(caller);
+        vm.expectRevert();
         endorser.upgradeToAndCall(
             newEndorserImpl,
             abi.encodeCall(newEndorser.initializeVN, ())

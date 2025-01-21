@@ -121,7 +121,7 @@ contract Tintero is ERC4626, TinteroLoanFactory, IPaymentCallback {
         return
             Math.min(
                 super.maxWithdraw(owner), // Max owner withdrawable assets
-                asset_.balanceOf(owner) // Total available vault's asset balance
+                asset_.balanceOf(address(this)) // Total available vault's asset balance
             );
     }
 
@@ -132,7 +132,7 @@ contract Tintero is ERC4626, TinteroLoanFactory, IPaymentCallback {
         return
             Math.min(
                 super.maxRedeem(owner), // Max owner redeemable shares
-                convertToShares(asset_.balanceOf(owner)) // Max amount of shares redeemable for vault's asset balance
+                convertToShares(asset_.balanceOf(address(this))) // Max amount of shares redeemable for vault's asset balance
             );
     }
 
