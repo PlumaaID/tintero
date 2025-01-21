@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {IERC20Metadata} from "@openzeppelin/contracts/interfaces/IERC20Metadata.sol";
+import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
 import {ERC4626Test} from "erc4626-tests/ERC4626.test.sol";
 import {BaseTest} from "./Base.t.sol";
 
@@ -10,6 +11,14 @@ import {PaymentLib} from "~/utils/PaymentLib.sol";
 import {TinteroLoanFactory, TinteroLoan} from "~/TinteroLoan.factory.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {TinteroMock, Tintero} from "./mocks/TinteroMock.sol";
+
+contract TinteroLoanVN is TinteroLoan {
+    function initializeVN() public reinitializer(2) {}
+
+    function version() public pure returns (string memory) {
+        return "N";
+    }
+}
 
 contract ERC20Mock is ERC20 {
     constructor() ERC20("ERC20Mock", "E20M") {}
@@ -74,7 +83,7 @@ contract TinteroTest is BaseTest, ERC4626Test {
             address loan,
             PaymentLib.Payment[] memory payments,
             uint256[] memory collateralTokenIds
-        ) = _requestLoan(borrower, beneficiary, salt, nPayments);
+        ) = _requestLoan(borrower, beneficiary, salt, nPayments, nPayments);
 
         // Loan is added to the management list
         assertTrue(tintero.isLoan(loan));
@@ -153,7 +162,7 @@ contract TinteroTest is BaseTest, ERC4626Test {
             address loan,
             PaymentLib.Payment[] memory payments,
             uint256[] memory collateralTokenIds
-        ) = _requestLoan(borrower, beneficiary, salt, nPayments);
+        ) = _requestLoan(borrower, beneficiary, salt, nPayments, nPayments);
 
         PaymentLib.Payment[] memory lastPayments = _mockPayments(
             nPayments,
@@ -282,32 +291,19 @@ contract TinteroTest is BaseTest, ERC4626Test {
             borrower,
             beneficiary,
             salt,
+            nPayments,
             nPayments
         );
 
-        uint96[] memory paymentIndexes = new uint96[](nTranches);
-        address[] memory recipients = new address[](nTranches);
-        for (uint256 i = 0; i < nTranches; i++) {
-            paymentIndexes[i] = uint96(i + 1);
-            recipients[i] = trancheRecipient;
-        }
-
-        // Must revert if the borrower is not a manager (role not assigned yet)
-        vm.prank(manager);
-        vm.expectRevert();
-        tintero.pushTranches(TinteroLoan(loan), paymentIndexes, recipients);
-
-        // Grant manager role
-        accessManager.grantRole(TINTERO_MANAGER_ROLE, manager, 0);
+        (
+            uint96[] memory paymentIndexes,
+            address[] memory recipients
+        ) = _pushTranches(manager, loan, nTranches, trancheRecipient);
 
         // Must revert if the address is not a loan
         vm.prank(manager);
         vm.expectRevert();
         tintero.pushTranches(TinteroLoan(fakeLoan), paymentIndexes, recipients);
-
-        // Manager pushes tranches
-        vm.prank(manager);
-        tintero.pushTranches(TinteroLoan(loan), paymentIndexes, recipients);
 
         // Check tranches
         for (uint256 i = 0; i < paymentIndexes.length; i++) {
@@ -336,8 +332,7 @@ contract TinteroTest is BaseTest, ERC4626Test {
         address manager,
         address fakeLoan,
         uint16 nPayments,
-        uint16 nTranches,
-        address trancheRecipient
+        uint16 nTranches
     ) public {
         vm.assume(nPayments <= 300);
         nTranches = uint16(bound(nTranches, 1, 300));
@@ -354,44 +349,13 @@ contract TinteroTest is BaseTest, ERC4626Test {
             borrower,
             beneficiary,
             bytes32(0),
+            nPayments,
             nPayments
         );
 
-        // Avoid stack too deep error
-        {
-            uint96[] memory paymentIndexes = new uint96[](nTranches);
-            address[] memory recipients = new address[](nTranches);
-            for (uint256 i = 0; i < nTranches; i++) {
-                paymentIndexes[i] = uint96(i + 1);
-                recipients[i] = trancheRecipient;
-            }
-            // Must revert if the borrower is not a manager (role not assigned yet)
-            vm.prank(manager);
-            vm.expectRevert();
-            tintero.pushTranches(TinteroLoan(loan), paymentIndexes, recipients);
+        _pushTranches(manager, loan, nTranches, address(this));
+        _addLiquidity(totalPrincipal);
 
-            // Grant manager role
-            accessManager.grantRole(TINTERO_MANAGER_ROLE, manager, 0);
-
-            // Adds liquidity to Tintero
-            uint256 amount = 1000 * 10 ** 6;
-            _mintUSDCTo(address(this), amount);
-            usdc.approve(address(tintero), amount);
-            tintero.deposit(amount, address(this));
-
-            // Fill the tranches
-            vm.prank(manager);
-            tintero.pushTranches(TinteroLoan(loan), paymentIndexes, recipients);
-
-            // Must revert if the address is not a loan
-            vm.prank(manager);
-            vm.expectRevert();
-            tintero.pushTranches(
-                TinteroLoan(fakeLoan),
-                paymentIndexes,
-                recipients
-            );
-        }
         IERC20Metadata asset_ = IERC20Metadata(tintero.asset());
 
         uint256 tinteroAssetBalanceBefore = asset_.balanceOf(address(tintero));
@@ -399,12 +363,13 @@ contract TinteroTest is BaseTest, ERC4626Test {
         uint256 reportedAssetsBefore = tintero.totalAssets();
         uint256 totalAssetsBefore = tintero.totalAssetsLent();
 
-        // Avoid stack too deep error
-        {
-            // Fund all payments
-            vm.prank(manager);
-            tintero.fundN(TinteroLoan(loan), nPayments);
-        }
+        // Must revert if the address is not a loan
+        vm.prank(manager);
+        vm.expectRevert();
+        tintero.fundN(TinteroLoan(fakeLoan), nPayments);
+
+        // Fund all payments
+        _fund(loan, manager, nPayments);
 
         // Actual assets are transferred to the beneficiary
         assertEq(
@@ -422,11 +387,149 @@ contract TinteroTest is BaseTest, ERC4626Test {
         assertEq(tintero.lentTo(loan), totalPrincipal);
     }
 
+    function testRepossess(
+        address borrower,
+        address beneficiary,
+        address manager,
+        address fakeLoan,
+        uint16 nPayments,
+        uint16 nTranches,
+        uint16 defaultThreshold,
+        address repossessReceiver
+    ) public {
+        nPayments = uint16(bound(nPayments, 2, 300));
+        nTranches = uint16(bound(nTranches, 1, 300));
+        vm.assume(nTranches <= nPayments);
+        defaultThreshold = uint16(bound(defaultThreshold, 1, nPayments - 1));
+
+        vm.assume(borrower != address(this));
+        vm.assume(manager != address(this));
+
+        // Can't be 0 or transfer will fail
+        vm.assume(borrower != address(0));
+        vm.assume(beneficiary != address(0));
+
+        vm.assume(repossessReceiver != address(this));
+
+        (
+            uint256 totalPrincipal,
+            address loan,
+            PaymentLib.Payment[] memory payments,
+
+        ) = _requestLoan(
+                borrower,
+                beneficiary,
+                bytes32(0),
+                nPayments,
+                defaultThreshold
+            );
+
+        _pushTranches(manager, loan, nTranches, address(this));
+        _addLiquidity(totalPrincipal);
+        _fund(loan, manager, nPayments);
+
+        // Must revert if default threshold is not reached
+        vm.prank(manager);
+        vm.expectRevert();
+        tintero.repossess(TinteroLoan(loan), 0, nPayments, repossessReceiver);
+
+        // Must revert if the address is not a loan
+        vm.prank(manager);
+        vm.expectRevert();
+        tintero.repossess(
+            TinteroLoan(fakeLoan),
+            0,
+            nPayments,
+            repossessReceiver
+        );
+
+        _repossess(
+            loan,
+            manager,
+            payments,
+            defaultThreshold,
+            repossessReceiver
+        );
+    }
+
+    function testUpgradeLoan(
+        address borrower,
+        address beneficiary,
+        address manager,
+        address fakeLoan,
+        uint16 nPayments,
+        uint16 nTranches,
+        uint16 defaultThreshold,
+        address repossessReceiver
+    ) public {
+        nPayments = uint16(bound(nPayments, 2, 300));
+        nTranches = uint16(bound(nTranches, 1, 300));
+        vm.assume(nTranches <= nPayments);
+        defaultThreshold = uint16(bound(defaultThreshold, 1, nPayments - 1));
+
+        vm.assume(borrower != address(this));
+        vm.assume(manager != address(this));
+
+        // Can't be 0 or transfer will fail
+        vm.assume(borrower != address(0));
+        vm.assume(beneficiary != address(0));
+
+        vm.assume(repossessReceiver != address(this));
+
+        (, address loan, , ) = _requestLoan(
+            borrower,
+            beneficiary,
+            bytes32(0),
+            nPayments,
+            defaultThreshold
+        );
+
+        TinteroLoanVN newTinteroLoan = new TinteroLoanVN();
+        address newTinteroLoanImpl = address(newTinteroLoan);
+
+        // Must revert if the borrower is not a manager (role not assigned yet)
+        vm.prank(manager);
+        vm.expectRevert();
+        tintero.upgradeLoan(
+            TinteroLoan(loan),
+            newTinteroLoanImpl,
+            abi.encodeCall(newTinteroLoan.initializeVN, ())
+        );
+
+        bytes4[] memory selectors = new bytes4[](1);
+        selectors[0] = Tintero.upgradeLoan.selector;
+        accessManager.setTargetFunctionRole(
+            address(tintero),
+            selectors,
+            UPGRADER_ROLE
+        );
+        accessManager.grantRole(UPGRADER_ROLE, manager, 0);
+
+        // Must revert if the loan is not a TinteroLoan
+        vm.prank(manager);
+        vm.expectRevert();
+        tintero.upgradeLoan(
+            TinteroLoan(fakeLoan),
+            newTinteroLoanImpl,
+            abi.encodeCall(newTinteroLoan.initializeVN, ())
+        );
+
+        vm.prank(manager);
+        vm.expectEmit(loan);
+        emit ERC1967Utils.Upgraded(newTinteroLoanImpl);
+        tintero.upgradeLoan(
+            TinteroLoan(loan),
+            newTinteroLoanImpl,
+            abi.encodeCall(newTinteroLoan.initializeVN, ())
+        );
+    }
+
     function _requestLoan(
         address borrower,
         address beneficiary,
         bytes32 salt,
-        uint16 nPayments
+        uint16 nPayments,
+        uint16 defaultThreshold
     )
         internal
         returns (
@@ -443,7 +546,7 @@ contract TinteroTest is BaseTest, ERC4626Test {
         (loan, , ) = tintero.predictLoanAddress(
             address(endorser),
             beneficiary,
-            nPayments,
+            defaultThreshold,
             salt,
             borrower
         );
@@ -461,7 +564,7 @@ contract TinteroTest is BaseTest, ERC4626Test {
         tintero.requestLoan(
             address(endorser),
             beneficiary,
-            nPayments,
+            defaultThreshold,
             payments,
             collateralTokenIds,
             salt
@@ -472,6 +575,65 @@ contract TinteroTest is BaseTest, ERC4626Test {
         // Calculate total principal
         for (uint256 i = 0; i < payments.length; i++)
             totalPrincipal += payments[i].principal;
+    }
+
+    function _pushTranches(
+        address manager,
+        address loan,
+        uint16 nTranches,
+        address trancheRecipient
+    )
+        internal
+        returns (uint96[] memory paymentIndexes, address[] memory recipients)
+    {
+        paymentIndexes = new uint96[](nTranches);
+        recipients = new address[](nTranches);
+        for (uint256 i = 0; i < nTranches; i++) {
+            paymentIndexes[i] = uint96(i + 1);
+            recipients[i] = trancheRecipient;
+        }
+        // Must revert if the borrower is not a manager (role not assigned yet)
+        vm.prank(manager);
+        vm.expectRevert();
+        tintero.pushTranches(TinteroLoan(loan), paymentIndexes, recipients);
+
+        // Grant manager role
+        accessManager.grantRole(TINTERO_MANAGER_ROLE, manager, 0);
+
+        // Manager pushes tranches
+        vm.prank(manager);
+        tintero.pushTranches(TinteroLoan(loan), paymentIndexes, recipients);
+    }
+
+    function _addLiquidity(uint256 amount) internal {
+        _mintUSDCTo(address(this), amount);
+        usdc.approve(address(tintero), amount);
+        tintero.deposit(amount, address(this));
+    }
+
+    function _fund(address loan, address manager, uint256 nPayments) internal {
+        vm.prank(manager);
+        tintero.fundN(TinteroLoan(loan), nPayments);
+    }
+
+    function _repossess(
+        address loan,
+        address manager,
+        PaymentLib.Payment[] memory payments,
+        uint16 defaultThreshold,
+        address repossessReceiver
+    ) internal {
+        // Miss `defaultThreshold` payments
+        PaymentLib.Payment memory lastPayment = payments[defaultThreshold];
+        skip(lastPayment.maturityPeriod);
+
+        vm.prank(manager);
+        tintero.repossess(
+            TinteroLoan(loan),
+            0,
+            payments.length,
+            repossessReceiver
+        );
     }
 
     function _mockPayments(

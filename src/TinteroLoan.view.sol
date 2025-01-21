@@ -140,18 +140,15 @@ abstract contract TinteroLoanView is TinteroLoanStorage {
     function _defaulted(uint256 current) internal view returns (bool) {
         uint256 threshold = defaultThreshold();
         uint256 defaultAt = current + threshold;
-        uint256 total = totalPayments();
 
-        if (defaultAt >= total) return false; // Cannot default if there are no more payments
+        if (defaultAt >= totalPayments()) return false; // Cannot default if there are no more payments
 
-        uint256 last = total - 1;
         // If any of the following payments until the threshold is not matured, the loan is not defaulted
         for (uint256 i = current; i < defaultAt; i++) {
             (, PaymentLib.Payment memory payment_) = payment(i);
-            if (!payment_.matured()) break;
-            if (i == last) return true;
+            if (!payment_.matured()) return false;
         }
 
-        return false;
+        return true;
     }
 }
