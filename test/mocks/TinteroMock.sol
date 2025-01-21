@@ -16,6 +16,6 @@ contract TinteroMock is Tintero {
         // With a virtual offset, some cases for test_maxRedeem fail since the offset
         // overflows at very high values. These are not realistic scenarios, but
         // the property test should still pass.
-        return 0;
+        return super._decimalsOffset() - super._decimalsOffset();
     }
 }
