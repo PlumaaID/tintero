@@ -7,19 +7,17 @@ pragma solidity ^0.8.13;
 //   forge test --fork-url https://rpc.ankr.com/eth
 
 import "forge-std/Test.sol";
+import {IERC20Metadata} from "@openzeppelin/contracts/interfaces/IERC20Metadata.sol";
 
 // temporary interface for minting USDC
 // should be implemented more extensively, and organized somewhere
-interface IUSDC {
-    function decimals() external view returns (uint8);
-    function balanceOf(address account) external view returns (uint256);
+interface IUSDC is IERC20Metadata {
     function mint(address to, uint256 amount) external;
     function configureMinter(
         address minter,
         uint256 minterAllowedAmount
     ) external;
     function masterMinter() external view returns (address);
-    function approve(address spender, uint256 amount) external returns (bool);
     function initialize(
         string memory tokenName,
         string memory tokenSymbol,

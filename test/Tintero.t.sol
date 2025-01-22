@@ -111,13 +111,15 @@ contract TinteroTest is BaseTest, ERC4626Test {
             bound(nExtraPayments, 0, ARBITRARY_MAX_PAYMENTS)
         );
 
-        (address loan, , , ) = _requestLoan(
+        (address loan, uint256 totalPrincipal, , ) = _requestLoan(
             borrower,
             beneficiary,
             salt,
             nPayments,
             nPayments
         );
+
+        assertEq(usdc.allowance(address(tintero), loan), totalPrincipal);
 
         PaymentLib.Payment[] memory lastPayments = _mockPayments(
             nPayments,
@@ -231,6 +233,9 @@ contract TinteroTest is BaseTest, ERC4626Test {
 
         // Fund all payments
         _fund(loan, manager, nPayments);
+
+        // Allowance is reset
+        assertEq(usdc.allowance(address(tintero), loan), 0);
 
         // Reported assets remain the same
         assertEq(tintero.totalAssets(), reportedAssetsBefore);
