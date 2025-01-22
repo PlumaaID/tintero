@@ -39,11 +39,16 @@ import {LoanState} from "./interfaces/ITinteroLoan.types.sol";
 ///
 /// - Payments: A payment is a structure that represents a payment to be made back to the loan.
 ///   Each payment has a principal amount and an interest rate that is accrued over time in a
-///   linear fashion. A premium rate is added to the interest rate after the payment is due.
+///   linear fashion. A premium rate is added to the interest rate after the payment is due (at maturity).
 /// - Tranches: A tranche is a collection of payments that have the same recipient. They are used
 ///   to sell parts of the loan to different investors.
 /// - Collateral: The collateral is an ERC721 token that is used to back the payments. A payment's
 ///   collateral can be repossessed if the loan defaults after a default threshold.
+///
+/// NOTE: Users must approve this contract to transfer their ERC-721 tokens used as collateral.
+/// This may allow a malicious actor to transfer request a loan and transferring their tokens
+/// to this contract unexpectedly. For those cases, the original owner can retake their collateral
+/// with the `withdrawPaymentCollateral` function.
 contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
     using SafeERC20 for IERC20;
     using EnumerableSet for EnumerableSet.UintSet;
@@ -79,7 +84,7 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
         address liquidityProvider_,
         address collateralAsset_,
         address beneficiary_,
-        uint16 defaultThreshold_
+        uint24 defaultThreshold_
     ) public initializer {
         if (beneficiary_ == address(0)) revert InvalidBeneficiary();
         LoanStorage storage $ = getTinteroLoanStorage();
@@ -183,6 +188,7 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
         uint256 totalPrincipal = _fundN(n);
 
         // Interactions
+        // We tie funding to `msg.sender`, otherwise it enables arbitrary account draining if they approved the contract.
         lendingAsset().safeTransferFrom(
             address(msg.sender),
             beneficiary(),
@@ -459,7 +465,7 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
         uint256 end = Math.min(start + n, totalPayments_);
 
         LoanStorage storage $ = getTinteroLoanStorage();
-        $.currentFundingIndex = end.toUint16();
+        $.currentFundingIndex = end.toUint24();
 
         uint256 totalPrincipal = 0;
         for (uint256 i = start; i < end; i++) {
@@ -503,36 +509,6 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
         _debitCollateral(start, end, beneficiary(), 0);
     }
 
-    /// @dev Prepares the loan for repayment of `n` payments. Returns the total amount to pay.
-    /// Assumes end is not greater than the total number of payments.
-    ///
-    /// Effects:
-    ///
-    /// - Moves to ONGOING if paid until below the default threshold.
-    /// - Moves to PAID state if all payments are repaid.
-    /// - Emits a `RepaidPayment` event for each payment repaid.
-    function _prepareToPay(
-        uint256 start,
-        uint256 end
-    ) internal returns (uint256 toPay, uint256 principalPaid) {
-        for (uint256 i = start; i < end; i++) {
-            (
-                uint256 collateralTokenId,
-                PaymentLib.Payment memory payment_
-            ) = payment(i);
-            uint48 timepoint = Time.timestamp();
-            principalPaid += payment_.principal;
-            toPay += payment_.principal + payment_.accruedInterest(timepoint);
-            emit RepaidPayment(
-                i,
-                collateralTokenId,
-                payment_.principal,
-                payment_.regularAccruedInterest(timepoint),
-                payment_.premiumAccruedInterest(timepoint)
-            );
-        }
-    }
-
     /// @dev Repays the current loan and `n` future payments.
     ///
     /// Requirements:
@@ -556,7 +532,7 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
     ) internal {
         LoanStorage storage $ = getTinteroLoanStorage();
         uint256 principalPaid = _repayByTranches(start, end);
-        $.currentPaymentIndex = end.toUint16();
+        $.currentPaymentIndex = end.toUint24();
         _debitCollateral(start, end, collateralReceiver, principalPaid);
     }
 
@@ -664,8 +640,39 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
                 Math.min(tEnd, end)
             );
             principalPaid += principalPaidInPayment;
+            // We tie funding to `msg.sender`, otherwise it enables arbitrary account draining if they approved the contract.
             lendingAsset().safeTransferFrom(msg.sender, _receiver, toPay);
             if (tEnd >= end) break;
+        }
+    }
+
+    /// @dev Prepares the loan for repayment of `n` payments. Returns the total amount to pay.
+    /// Assumes end is not greater than the total number of payments.
+    ///
+    /// Effects:
+    ///
+    /// - Moves to ONGOING if paid until below the default threshold.
+    /// - Moves to PAID state if all payments are repaid.
+    /// - Emits a `RepaidPayment` event for each payment repaid.
+    function _prepareToPay(
+        uint256 start,
+        uint256 end
+    ) private returns (uint256 toPay, uint256 principalPaid) {
+        for (uint256 i = start; i < end; i++) {
+            (
+                uint256 collateralTokenId,
+                PaymentLib.Payment memory payment_
+            ) = payment(i);
+            uint48 timepoint = Time.timestamp();
+            principalPaid += payment_.principal;
+            toPay += payment_.principal + payment_.accruedInterest(timepoint);
+            emit RepaidPayment(
+                i,
+                collateralTokenId,
+                payment_.principal,
+                payment_.regularAccruedInterest(timepoint),
+                payment_.premiumAccruedInterest(timepoint)
+            );
         }
     }
 

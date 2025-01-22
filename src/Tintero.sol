@@ -158,7 +158,7 @@ contract Tintero is ERC4626, TinteroLoanFactory, IPaymentCallback {
     function requestLoan(
         address collateralCollection_,
         address beneficiary_,
-        uint16 defaultThreshold_,
+        uint24 defaultThreshold_,
         PaymentLib.Payment[] calldata payments_,
         uint256[] calldata collateralTokenIds_,
         bytes32 salt

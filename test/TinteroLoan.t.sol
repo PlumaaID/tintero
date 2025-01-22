@@ -12,11 +12,11 @@ contract TinteroLoanTest is BaseTest {
     function testLoanCreation(
         address borrower,
         address beneficiary,
-        uint16 nPayments,
-        uint16 defaultThreshold
+        uint24 nPayments,
+        uint24 defaultThreshold
     ) public {
         _sanitizeActors(borrower, beneficiary);
-        nPayments = uint16(bound(nPayments, 0, ARBITRARY_MAX_PAYMENTS));
+        nPayments = uint24(bound(nPayments, 0, ARBITRARY_MAX_PAYMENTS));
         vm.assume(defaultThreshold != 0);
 
         (
@@ -81,11 +81,11 @@ contract TinteroLoanTest is BaseTest {
     function testRevertInitializeImplementation(
         address borrower,
         address beneficiary,
-        uint16 nPayments,
-        uint16 defaultThreshold
+        uint24 nPayments,
+        uint24 defaultThreshold
     ) public {
         _sanitizeActors(borrower, beneficiary);
-        nPayments = uint16(bound(nPayments, 0, ARBITRARY_MAX_PAYMENTS));
+        nPayments = uint24(bound(nPayments, 0, ARBITRARY_MAX_PAYMENTS));
         vm.assume(defaultThreshold != 0);
 
         (address loan, , , ) = _requestLoan(
@@ -107,11 +107,11 @@ contract TinteroLoanTest is BaseTest {
 
     function testRevertInitializeZeroBeneficiary(
         address borrower,
-        uint16 nPayments,
-        uint16 defaultThreshold
+        uint24 nPayments,
+        uint24 defaultThreshold
     ) public {
         vm.assume(borrower != address(0));
-        nPayments = uint16(bound(nPayments, 0, ARBITRARY_MAX_PAYMENTS));
+        nPayments = uint24(bound(nPayments, 0, ARBITRARY_MAX_PAYMENTS));
 
         PaymentLib.Payment[] memory payments = _mockPayments(0, nPayments);
         uint256[] memory collateralTokenIds = _mockCollateralIds(
@@ -135,13 +135,13 @@ contract TinteroLoanTest is BaseTest {
         address borrower,
         address beneficiary,
         address manager,
-        uint16 nPayments,
-        uint16 nExtraPayments
+        uint24 nPayments,
+        uint24 nExtraPayments
     ) public {
         _sanitizeAccessManagerCaller(manager);
         _sanitizeActors(borrower, beneficiary);
-        nPayments = uint16(bound(nPayments, 0, ARBITRARY_MAX_PAYMENTS));
-        nExtraPayments = uint16(
+        nPayments = uint24(bound(nPayments, 0, ARBITRARY_MAX_PAYMENTS));
+        nExtraPayments = uint24(
             bound(nExtraPayments, 0, ARBITRARY_MAX_PAYMENTS)
         );
 
@@ -247,16 +247,16 @@ contract TinteroLoanTest is BaseTest {
         address borrower,
         address beneficiary,
         address manager,
-        uint16 nPayments,
-        uint16 nExtraPayments
+        uint24 nPayments,
+        uint24 nExtraPayments
     ) public {
         _sanitizeAccessManagerCaller(manager);
         _sanitizeActors(borrower, beneficiary);
-        nPayments = uint16(bound(nPayments, 0, ARBITRARY_MAX_PAYMENTS));
-        nExtraPayments = uint16(
+        nPayments = uint24(bound(nPayments, 0, ARBITRARY_MAX_PAYMENTS));
+        nExtraPayments = uint24(
             bound(nExtraPayments, 0, ARBITRARY_MAX_PAYMENTS)
         );
-        nExtraPayments = uint16(bound(nExtraPayments, 1, 1000));
+        nExtraPayments = uint24(bound(nExtraPayments, 1, 1000));
 
         (address loan, , , ) = _requestLoan(
             borrower,
@@ -291,11 +291,11 @@ contract TinteroLoanTest is BaseTest {
         address borrower,
         address beneficiary,
         address manager,
-        uint16 nPayments
+        uint24 nPayments
     ) public {
         _sanitizeAccessManagerCaller(manager);
         _sanitizeActors(borrower, beneficiary);
-        nPayments = uint16(bound(nPayments, 0, ARBITRARY_MAX_PAYMENTS));
+        nPayments = uint24(bound(nPayments, 0, ARBITRARY_MAX_PAYMENTS));
 
         (address loan, , , ) = _requestLoan(
             borrower,
@@ -328,11 +328,11 @@ contract TinteroLoanTest is BaseTest {
         address borrower,
         address beneficiary,
         address manager,
-        uint16 nPayments
+        uint24 nPayments
     ) public {
         _sanitizeAccessManagerCaller(manager);
         _sanitizeActors(borrower, beneficiary);
-        nPayments = uint16(bound(nPayments, 0, ARBITRARY_MAX_PAYMENTS));
+        nPayments = uint24(bound(nPayments, 0, ARBITRARY_MAX_PAYMENTS));
 
         (address loan, , , ) = _requestLoan(
             borrower,
@@ -365,13 +365,13 @@ contract TinteroLoanTest is BaseTest {
     function testPushPaymentsRevertNotLiquidityProvider(
         address borrower,
         address beneficiary,
-        uint16 nPayments,
-        uint16 nExtraPayments,
+        uint24 nPayments,
+        uint24 nExtraPayments,
         address notLiquidityProvider
     ) public {
         _sanitizeActors(borrower, beneficiary);
-        nPayments = uint16(bound(nPayments, 0, ARBITRARY_MAX_PAYMENTS));
-        nExtraPayments = uint16(
+        nPayments = uint24(bound(nPayments, 0, ARBITRARY_MAX_PAYMENTS));
+        nExtraPayments = uint24(
             bound(nExtraPayments, 0, ARBITRARY_MAX_PAYMENTS)
         );
         vm.assume(notLiquidityProvider != address(tintero));
@@ -403,8 +403,8 @@ contract TinteroLoanTest is BaseTest {
         address borrower,
         address beneficiary,
         address manager,
-        uint16 nPayments,
-        uint16 nTranches,
+        uint24 nPayments,
+        uint24 nTranches,
         address trancheRecipient
     ) public {
         _sanitizeAccessManagerCaller(manager);
@@ -455,8 +455,8 @@ contract TinteroLoanTest is BaseTest {
         address borrower,
         address beneficiary,
         address manager,
-        uint16 nPayments,
-        uint16 nTranches
+        uint24 nPayments,
+        uint24 nTranches
     ) public {
         _sanitizeAccessManagerCaller(manager);
         _sanitizeActors(borrower, beneficiary);
@@ -489,8 +489,8 @@ contract TinteroLoanTest is BaseTest {
     function testPushTranchesRevertNoLiquidityProvider(
         address borrower,
         address beneficiary,
-        uint16 nPayments,
-        uint16 nTranches,
+        uint24 nPayments,
+        uint24 nTranches,
         address notLiquidityProvider
     ) public {
         _sanitizeActors(borrower, beneficiary);
@@ -516,8 +516,8 @@ contract TinteroLoanTest is BaseTest {
         address borrower,
         address beneficiary,
         address manager,
-        uint16 nPayments,
-        uint16 nTranches
+        uint24 nPayments,
+        uint24 nTranches
     ) public {
         _sanitizeAccessManagerCaller(manager);
         _sanitizeActors(borrower, beneficiary);
@@ -570,13 +570,13 @@ contract TinteroLoanTest is BaseTest {
         address borrower,
         address beneficiary,
         address manager,
-        uint16 nPayments,
-        uint16 nExtraPayments,
-        uint16 nTranches
+        uint24 nPayments,
+        uint24 nExtraPayments,
+        uint24 nTranches
     ) public {
         _sanitizeAccessManagerCaller(manager);
         _sanitizeActors(borrower, beneficiary);
-        nExtraPayments = uint16(bound(nExtraPayments, 1, 1000));
+        nExtraPayments = uint24(bound(nExtraPayments, 1, 1000));
         (nPayments, nTranches) = _sanitizeTranches(nPayments, nTranches);
 
         (address loan, uint256 totalPrincipal, , ) = _requestLoan(
@@ -619,10 +619,10 @@ contract TinteroLoanTest is BaseTest {
     function testWithdrawPaymentCollateral(
         address borrower,
         address beneficiary,
-        uint16 nPayments
+        uint24 nPayments
     ) public {
         _sanitizeActors(borrower, beneficiary);
-        nPayments = uint16(bound(nPayments, 0, ARBITRARY_MAX_PAYMENTS));
+        nPayments = uint24(bound(nPayments, 0, ARBITRARY_MAX_PAYMENTS));
 
         (address loan, , , uint256[] memory collateralTokenIds) = _requestLoan(
             borrower,
@@ -646,11 +646,11 @@ contract TinteroLoanTest is BaseTest {
     function testWithdrawPaymentCollateralNotBeneficiary(
         address borrower,
         address beneficiary,
-        uint16 nPayments,
+        uint24 nPayments,
         address notBeneficiary
     ) public {
         _sanitizeActors(borrower, beneficiary);
-        nPayments = uint16(bound(nPayments, 0, ARBITRARY_MAX_PAYMENTS));
+        nPayments = uint24(bound(nPayments, 0, ARBITRARY_MAX_PAYMENTS));
         vm.assume(notBeneficiary != beneficiary);
 
         (address loan, , , ) = _requestLoan(
@@ -670,12 +670,12 @@ contract TinteroLoanTest is BaseTest {
         address borrower,
         address beneficiary,
         address manager,
-        uint16 nPayments,
+        uint24 nPayments,
         address collateralReceiver
     ) public {
         _sanitizeAccessManagerCaller(manager);
         _sanitizeActors(borrower, beneficiary);
-        nPayments = uint16(bound(nPayments, 1, 1000));
+        nPayments = uint24(bound(nPayments, 1, 1000));
 
         (
             address loan,
@@ -743,15 +743,15 @@ contract TinteroLoanTest is BaseTest {
         address borrower,
         address beneficiary,
         address manager,
-        uint16 nPayments,
-        uint16 nTranches,
+        uint24 nPayments,
+        uint24 nTranches,
         address collateralReceiver
     ) public {
         _sanitizeAccessManagerCaller(manager);
         _sanitizeActors(borrower, beneficiary);
 
-        nPayments = uint16(bound(nPayments, 1, 1000));
-        nTranches = uint16(bound(nTranches, 1, 1000));
+        nPayments = uint24(bound(nPayments, 1, 1000));
+        nTranches = uint24(bound(nTranches, 1, 1000));
         vm.assume(nTranches <= nPayments);
 
         (
@@ -827,9 +827,9 @@ contract TinteroLoanTest is BaseTest {
         address borrower,
         address beneficiary,
         address manager,
-        uint16 nPayments,
-        uint16 nTranches,
-        uint16 defaultThreshold,
+        uint24 nPayments,
+        uint24 nTranches,
+        uint24 defaultThreshold,
         address repossessReceiver
     ) public {
         _sanitizeAccessManagerCaller(manager);
@@ -879,13 +879,13 @@ contract TinteroLoanTest is BaseTest {
     function testRepossessNotLiquidityProvider(
         address borrower,
         address beneficiary,
-        uint16 nPayments,
-        uint16 defaultThreshold,
+        uint24 nPayments,
+        uint24 defaultThreshold,
         address notLiquidityProvider,
         address repossessReceiver
     ) public {
         _sanitizeActors(borrower, beneficiary);
-        nPayments = uint16(bound(nPayments, 1, 1000));
+        nPayments = uint24(bound(nPayments, 1, 1000));
         defaultThreshold = _sanitizeDefaultThreshold(
             nPayments,
             defaultThreshold

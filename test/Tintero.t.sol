@@ -66,10 +66,10 @@ contract TinteroTest is BaseTest, ERC4626Test {
         address borrower,
         address beneficiary,
         bytes32 salt,
-        uint16 nPayments
+        uint24 nPayments
     ) public {
         _sanitizeActors(borrower, beneficiary);
-        nPayments = uint16(bound(nPayments, 0, ARBITRARY_MAX_PAYMENTS));
+        nPayments = uint24(bound(nPayments, 0, ARBITRARY_MAX_PAYMENTS));
 
         // Any borrower can request a loan to any beneficiary
         (
@@ -101,13 +101,13 @@ contract TinteroTest is BaseTest, ERC4626Test {
         address manager,
         address fakeLoan,
         bytes32 salt,
-        uint16 nPayments,
+        uint24 nPayments,
         uint256 nExtraPayments
     ) public {
         _sanitizeAccessManagerCaller(manager);
         _sanitizeActors(borrower, beneficiary);
-        nPayments = uint16(bound(nPayments, 0, ARBITRARY_MAX_PAYMENTS));
-        nExtraPayments = uint16(
+        nPayments = uint24(bound(nPayments, 0, ARBITRARY_MAX_PAYMENTS));
+        nExtraPayments = uint24(
             bound(nExtraPayments, 0, ARBITRARY_MAX_PAYMENTS)
         );
 
@@ -165,8 +165,8 @@ contract TinteroTest is BaseTest, ERC4626Test {
         address manager,
         address fakeLoan,
         bytes32 salt,
-        uint16 nPayments,
-        uint16 nTranches,
+        uint24 nPayments,
+        uint24 nTranches,
         address trancheRecipient
     ) public {
         _sanitizeAccessManagerCaller(manager);
@@ -203,8 +203,8 @@ contract TinteroTest is BaseTest, ERC4626Test {
         address beneficiary,
         address manager,
         address fakeLoan,
-        uint16 nPayments,
-        uint16 nTranches
+        uint24 nPayments,
+        uint24 nTranches
     ) public {
         _sanitizeAccessManagerCaller(manager);
         _sanitizeActors(borrower, beneficiary);
@@ -244,9 +244,9 @@ contract TinteroTest is BaseTest, ERC4626Test {
         address beneficiary,
         address manager,
         address fakeLoan,
-        uint16 nPayments,
-        uint16 nTranches,
-        uint16 defaultThreshold,
+        uint24 nPayments,
+        uint24 nTranches,
+        uint24 defaultThreshold,
         address repossessReceiver
     ) public {
         _sanitizeAccessManagerCaller(manager);
@@ -305,8 +305,8 @@ contract TinteroTest is BaseTest, ERC4626Test {
         address beneficiary,
         address manager,
         address fakeLoan,
-        uint16 nPayments,
-        uint16 nTranches
+        uint24 nPayments,
+        uint24 nTranches
     ) public {
         _sanitizeAccessManagerCaller(manager);
         _sanitizeActors(borrower, beneficiary);

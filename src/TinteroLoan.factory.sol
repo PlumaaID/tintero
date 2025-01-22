@@ -21,7 +21,7 @@ abstract contract TinteroLoanFactory is AccessManaged {
     function predictLoanAddress(
         address collateralCollection_,
         address beneficiary_,
-        uint16 defaultThreshold_,
+        uint24 defaultThreshold_,
         bytes32 salt,
         address caller_
     )
@@ -46,7 +46,7 @@ abstract contract TinteroLoanFactory is AccessManaged {
     function _deployLoan(
         address collateralCollection_,
         address beneficiary_,
-        uint16 defaultThreshold_,
+        uint24 defaultThreshold_,
         bytes32 salt
     ) internal returns (address loan) {
         (address predicted, bytes memory bytecode, ) = predictLoanAddress(
@@ -69,7 +69,7 @@ abstract contract TinteroLoanFactory is AccessManaged {
     function _loanProxyBytecode(
         address collateralCollection_,
         address beneficiary_,
-        uint16 defaultThreshold_
+        uint24 defaultThreshold_
     ) internal view returns (bytes memory) {
         return
             bytes.concat(

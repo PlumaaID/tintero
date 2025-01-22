@@ -107,8 +107,8 @@ contract BaseTest is Test, USDCTest {
         address borrower,
         address beneficiary,
         bytes32 salt,
-        uint16 nPayments,
-        uint16 defaultThreshold
+        uint24 nPayments,
+        uint24 defaultThreshold
     )
         internal
         returns (
@@ -162,9 +162,9 @@ contract BaseTest is Test, USDCTest {
     function _pushTranches(
         address manager,
         address loan,
-        uint16 nTranches,
+        uint24 nTranches,
         address trancheRecipient,
-        uint16 lastPaymentIndex
+        uint24 lastPaymentIndex
     )
         internal
         returns (uint96[] memory paymentIndexes, address[] memory recipients)
@@ -209,7 +209,7 @@ contract BaseTest is Test, USDCTest {
         address loan,
         address manager,
         PaymentLib.Payment[] memory payments,
-        uint16 defaultThreshold,
+        uint24 defaultThreshold,
         address repossessReceiver
     ) internal {
         // Miss `defaultThreshold` payments
@@ -273,13 +273,13 @@ contract BaseTest is Test, USDCTest {
     )
         internal
         pure
-        returns (uint16 sanitizedNPayments, uint16 sanitizedNTranches)
+        returns (uint24 sanitizedNPayments, uint24 sanitizedNTranches)
     {
-        sanitizedNPayments = uint16(
+        sanitizedNPayments = uint24(
             bound(nPayments, 0, ARBITRARY_MAX_PAYMENTS)
         );
         // There must be at least 1 tranche, otherwise reverts
-        sanitizedNTranches = uint16(
+        sanitizedNTranches = uint24(
             bound(nTranches, 1, ARBITRARY_MAX_PAYMENTS)
         );
         // There can be only as much tranches as payments
@@ -288,13 +288,13 @@ contract BaseTest is Test, USDCTest {
     }
 
     function _sanitizeDefaultThreshold(
-        uint16 nPayments,
-        uint16 defaultThreshold
-    ) internal pure returns (uint16 sanitizedDefaultThreshold) {
+        uint24 nPayments,
+        uint24 defaultThreshold
+    ) internal pure returns (uint24 sanitizedDefaultThreshold) {
         // Must be at least 1 so that there's at least 1 payment
         // otherwise it can't push tranches as it would be already defaulted
-        uint16 minThreshold = 1;
-        return uint16(bound(defaultThreshold, minThreshold, nPayments));
+        uint24 minThreshold = 1;
+        return uint24(bound(defaultThreshold, minThreshold, nPayments));
     }
 
     function _sanitizeAccessManagerCaller(address caller) internal view {
