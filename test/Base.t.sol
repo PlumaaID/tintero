@@ -19,7 +19,7 @@ contract BaseTest is Test, USDCTest {
     EndorserMock internal endorser;
     TinteroMock internal tintero;
 
-    uint256 internal constant ARBITRARY_MAX_PAYMENTS = 1000;
+    uint256 internal constant ARBITRARY_MAX_PAYMENTS = 100;
 
     uint64 internal constant UPGRADER_ROLE =
         uint64(bytes8(keccak256("PlumaaID.UPGRADER")));

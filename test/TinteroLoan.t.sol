@@ -236,6 +236,121 @@ contract TinteroLoanTest is BaseTest {
         }
     }
 
+    function testPushPaymentsRevertMismatchedPaymentCollateralIds(
+        address borrower,
+        address beneficiary,
+        address manager,
+        uint16 nPayments,
+        uint16 nExtraPayments
+    ) public {
+        _sanitizeActors(borrower, beneficiary);
+        vm.assume(nPayments <= ARBITRARY_MAX_PAYMENTS);
+        vm.assume(nExtraPayments <= ARBITRARY_MAX_PAYMENTS);
+        nExtraPayments = uint16(bound(nExtraPayments, 1, 1000));
+
+        (address loan, , , ) = _requestLoan(
+            borrower,
+            beneficiary,
+            bytes32(0),
+            nPayments,
+            nPayments
+        );
+
+        PaymentLib.Payment[] memory lastPayments = _mockPayments(
+            nPayments,
+            nExtraPayments - 1
+        );
+        uint256[] memory lastCollateralIds = _mockCollateralIds(
+            nPayments,
+            nExtraPayments,
+            borrower
+        );
+
+        // Mismatched payment and collateral ids
+        accessManager.grantRole(TINTERO_MANAGER_ROLE, manager, 0);
+        vm.prank(manager);
+        vm.expectRevert();
+        tintero.pushPayments(
+            TinteroLoan(loan),
+            lastCollateralIds,
+            lastPayments
+        );
+    }
+
+    function testPushPaymentsRevertMaturedPayment(
+        address borrower,
+        address beneficiary,
+        address manager,
+        uint16 nPayments
+    ) public {
+        _sanitizeActors(borrower, beneficiary);
+        vm.assume(nPayments <= ARBITRARY_MAX_PAYMENTS);
+
+        (address loan, , , ) = _requestLoan(
+            borrower,
+            beneficiary,
+            bytes32(0),
+            nPayments,
+            nPayments
+        );
+
+        PaymentLib.Payment[] memory lastPayments = _mockPayments(nPayments, 1);
+        uint256[] memory lastCollateralIds = _mockCollateralIds(
+            nPayments,
+            1,
+            borrower
+        );
+
+        lastPayments[0].maturityPeriod = 0; // Matured
+
+        accessManager.grantRole(TINTERO_MANAGER_ROLE, manager, 0);
+        vm.prank(manager);
+        vm.expectRevert();
+        vm.expectRevert();
+        tintero.pushPayments(
+            TinteroLoan(loan),
+            lastCollateralIds,
+            lastPayments
+        );
+    }
+
+    function testPushPaymentRevertDuplicatedCollateralTokenId(
+        address borrower,
+        address beneficiary,
+        address manager,
+        uint16 nPayments
+    ) public {
+        _sanitizeActors(borrower, beneficiary);
+        vm.assume(nPayments <= ARBITRARY_MAX_PAYMENTS);
+
+        (address loan, , , ) = _requestLoan(
+            borrower,
+            beneficiary,
+            bytes32(0),
+            nPayments,
+            nPayments
+        );
+
+        PaymentLib.Payment[] memory lastPayments = _mockPayments(nPayments, 1);
+        uint256[] memory lastCollateralIds = _mockCollateralIds(
+            nPayments,
+            2,
+            borrower
+        );
+
+        // Duplicated collateral token id
+        lastCollateralIds[0] = lastCollateralIds[1];
+
+        accessManager.grantRole(TINTERO_MANAGER_ROLE, manager, 0);
+        vm.prank(manager);
+        vm.expectRevert();
+        tintero.pushPayments(
+            TinteroLoan(loan),
+            lastCollateralIds,
+            lastPayments
+        );
+    }
+
     function testPushPaymentsRevertNotLiquidityProvider(
         address borrower,
         address beneficiary,
@@ -319,6 +434,40 @@ contract TinteroLoanTest is BaseTest {
             assertEq(currentPaymentIndex, paymentIndexes[0]);
             assertEq(currentRecipient, recipients[0]);
         }
+    }
+
+    function testPushTranchesRevertMismatchedTranchePaymentIndexRecipient(
+        address borrower,
+        address beneficiary,
+        address manager,
+        uint16 nPayments,
+        uint16 nTranches
+    ) public {
+        _sanitizeActors(borrower, beneficiary);
+        nTranches = _sanitizeTranches(nPayments, nTranches);
+
+        (address loan, , , ) = _requestLoan(
+            borrower,
+            beneficiary,
+            bytes32(0),
+            nPayments,
+            nPayments
+        );
+
+        uint96[] memory paymentIndexes = new uint96[](nTranches - 1);
+        for (uint256 i = 0; i < nTranches - 1; i++) {
+            paymentIndexes[i] = uint96(i);
+        }
+
+        address[] memory recipients = new address[](nTranches);
+        for (uint256 i = 0; i < nTranches; i++) {
+            recipients[i] = address(this);
+        }
+
+        accessManager.grantRole(TINTERO_MANAGER_ROLE, manager, 0);
+        vm.prank(manager);
+        vm.expectRevert();
+        tintero.pushTranches(TinteroLoan(loan), paymentIndexes, recipients);
     }
 
     function testPushTranchesRevertNoLiquidityProvider(
@@ -461,6 +610,28 @@ contract TinteroLoanTest is BaseTest {
         }
     }
 
+    function testWithdrawPaymentCollateralNotBeneficiary(
+        address borrower,
+        address beneficiary,
+        uint16 nPayments,
+        address notBeneficiary
+    ) public {
+        _sanitizeActors(borrower, beneficiary);
+        vm.assume(nPayments <= ARBITRARY_MAX_PAYMENTS);
+
+        (address loan, , , ) = _requestLoan(
+            borrower,
+            beneficiary,
+            bytes32(0),
+            nPayments,
+            nPayments
+        );
+
+        vm.prank(notBeneficiary);
+        vm.expectRevert();
+        TinteroLoan(loan).withdrawPaymentCollateral(0, nPayments);
+    }
+
     function testRepayCurrent(
         address borrower,
         address beneficiary,
@@ -468,6 +639,9 @@ contract TinteroLoanTest is BaseTest {
         uint16 nPayments,
         address collateralReceiver
     ) public {
+        vm.assume(
+            collateralReceiver != 0x4e59b44847b379578588920cA78FbF26c0B4956C
+        ); // Create2Deployer
         _sanitizeActors(borrower, beneficiary);
         nPayments = uint16(bound(nPayments, 1, 1000));
 

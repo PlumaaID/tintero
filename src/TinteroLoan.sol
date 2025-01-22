@@ -531,8 +531,6 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
                 payment_.premiumAccruedInterest(timepoint)
             );
         }
-
-        return (toPay, principalPaid);
     }
 
     /// @dev Repays the current loan and `n` future payments.
