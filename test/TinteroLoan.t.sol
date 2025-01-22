@@ -16,7 +16,7 @@ contract TinteroLoanTest is BaseTest {
         uint16 defaultThreshold
     ) public {
         _sanitizeActors(borrower, beneficiary);
-        vm.assume(nPayments <= ARBITRARY_MAX_PAYMENTS);
+        nPayments = uint16(bound(nPayments, 0, ARBITRARY_MAX_PAYMENTS));
 
         (
             address loan,
@@ -47,7 +47,7 @@ contract TinteroLoanTest is BaseTest {
             totalPrincipal += payment.principal;
             assertEq(collateralTokenId, collateralTokenIds[i]);
             assertEq(payment.creation, payments[i].creation);
-            assertEq(payment.creation, uint48(block.timestamp));
+            assertEq(payment.creation, uint48(vm.getBlockTimestamp()));
             assertEq(payment.maturityPeriod, payments[i].maturityPeriod);
             assertEq(payment.gracePeriod, payments[i].gracePeriod);
             assertEq(payment.interestRate, payments[i].interestRate);
@@ -82,7 +82,7 @@ contract TinteroLoanTest is BaseTest {
         uint16 defaultThreshold
     ) public {
         _sanitizeActors(borrower, beneficiary);
-        vm.assume(nPayments <= ARBITRARY_MAX_PAYMENTS);
+        nPayments = uint16(bound(nPayments, 0, ARBITRARY_MAX_PAYMENTS));
 
         (address loan, , , ) = _requestLoan(
             borrower,
@@ -107,7 +107,7 @@ contract TinteroLoanTest is BaseTest {
         uint16 defaultThreshold
     ) public {
         vm.assume(borrower != address(0));
-        vm.assume(nPayments <= ARBITRARY_MAX_PAYMENTS);
+        nPayments = uint16(bound(nPayments, 0, ARBITRARY_MAX_PAYMENTS));
 
         PaymentLib.Payment[] memory payments = _mockPayments(0, nPayments);
         uint256[] memory collateralTokenIds = _mockCollateralIds(
@@ -134,9 +134,12 @@ contract TinteroLoanTest is BaseTest {
         uint16 nPayments,
         uint16 nExtraPayments
     ) public {
+        _sanitizeAccessManagerCaller(manager);
         _sanitizeActors(borrower, beneficiary);
-        vm.assume(nPayments <= ARBITRARY_MAX_PAYMENTS);
-        vm.assume(nExtraPayments <= ARBITRARY_MAX_PAYMENTS);
+        nPayments = uint16(bound(nPayments, 0, ARBITRARY_MAX_PAYMENTS));
+        nExtraPayments = uint16(
+            bound(nExtraPayments, 0, ARBITRARY_MAX_PAYMENTS)
+        );
 
         (
             address loan,
@@ -186,7 +189,7 @@ contract TinteroLoanTest is BaseTest {
             ) = TinteroLoan(loan).payment(i);
             assertEq(collateralTokenId, collateralTokenIds[i]);
             assertEq(payment.creation, payments[i].creation);
-            assertEq(payment.creation, uint48(block.timestamp));
+            assertEq(payment.creation, uint48(vm.getBlockTimestamp()));
             assertEq(payment.maturityPeriod, payments[i].maturityPeriod);
             assertEq(payment.gracePeriod, payments[i].gracePeriod);
             assertEq(payment.interestRate, payments[i].interestRate);
@@ -243,9 +246,12 @@ contract TinteroLoanTest is BaseTest {
         uint16 nPayments,
         uint16 nExtraPayments
     ) public {
+        _sanitizeAccessManagerCaller(manager);
         _sanitizeActors(borrower, beneficiary);
-        vm.assume(nPayments <= ARBITRARY_MAX_PAYMENTS);
-        vm.assume(nExtraPayments <= ARBITRARY_MAX_PAYMENTS);
+        nPayments = uint16(bound(nPayments, 0, ARBITRARY_MAX_PAYMENTS));
+        nExtraPayments = uint16(
+            bound(nExtraPayments, 0, ARBITRARY_MAX_PAYMENTS)
+        );
         nExtraPayments = uint16(bound(nExtraPayments, 1, 1000));
 
         (address loan, , , ) = _requestLoan(
@@ -283,8 +289,9 @@ contract TinteroLoanTest is BaseTest {
         address manager,
         uint16 nPayments
     ) public {
+        _sanitizeAccessManagerCaller(manager);
         _sanitizeActors(borrower, beneficiary);
-        vm.assume(nPayments <= ARBITRARY_MAX_PAYMENTS);
+        nPayments = uint16(bound(nPayments, 0, ARBITRARY_MAX_PAYMENTS));
 
         (address loan, , , ) = _requestLoan(
             borrower,
@@ -306,7 +313,6 @@ contract TinteroLoanTest is BaseTest {
         accessManager.grantRole(TINTERO_MANAGER_ROLE, manager, 0);
         vm.prank(manager);
         vm.expectRevert();
-        vm.expectRevert();
         tintero.pushPayments(
             TinteroLoan(loan),
             lastCollateralIds,
@@ -320,8 +326,9 @@ contract TinteroLoanTest is BaseTest {
         address manager,
         uint16 nPayments
     ) public {
+        _sanitizeAccessManagerCaller(manager);
         _sanitizeActors(borrower, beneficiary);
-        vm.assume(nPayments <= ARBITRARY_MAX_PAYMENTS);
+        nPayments = uint16(bound(nPayments, 0, ARBITRARY_MAX_PAYMENTS));
 
         (address loan, , , ) = _requestLoan(
             borrower,
@@ -359,8 +366,11 @@ contract TinteroLoanTest is BaseTest {
         address notLiquidityProvider
     ) public {
         _sanitizeActors(borrower, beneficiary);
-        vm.assume(nPayments <= ARBITRARY_MAX_PAYMENTS);
-        vm.assume(nExtraPayments <= ARBITRARY_MAX_PAYMENTS);
+        nPayments = uint16(bound(nPayments, 0, ARBITRARY_MAX_PAYMENTS));
+        nExtraPayments = uint16(
+            bound(nExtraPayments, 0, ARBITRARY_MAX_PAYMENTS)
+        );
+        vm.assume(notLiquidityProvider != address(tintero));
 
         (address loan, , , ) = _requestLoan(
             borrower,
@@ -393,8 +403,9 @@ contract TinteroLoanTest is BaseTest {
         uint16 nTranches,
         address trancheRecipient
     ) public {
+        _sanitizeAccessManagerCaller(manager);
         _sanitizeActors(borrower, beneficiary);
-        nTranches = _sanitizeTranches(nPayments, nTranches);
+        (nPayments, nTranches) = _sanitizeTranches(nPayments, nTranches);
 
         (address loan, , , ) = _requestLoan(
             borrower,
@@ -443,8 +454,9 @@ contract TinteroLoanTest is BaseTest {
         uint16 nPayments,
         uint16 nTranches
     ) public {
+        _sanitizeAccessManagerCaller(manager);
         _sanitizeActors(borrower, beneficiary);
-        nTranches = _sanitizeTranches(nPayments, nTranches);
+        (nPayments, nTranches) = _sanitizeTranches(nPayments, nTranches);
 
         (address loan, , , ) = _requestLoan(
             borrower,
@@ -478,7 +490,7 @@ contract TinteroLoanTest is BaseTest {
         address notLiquidityProvider
     ) public {
         _sanitizeActors(borrower, beneficiary);
-        nTranches = _sanitizeTranches(nPayments, nTranches);
+        (nPayments, nTranches) = _sanitizeTranches(nPayments, nTranches);
 
         (address loan, , , ) = _requestLoan(
             borrower,
@@ -503,8 +515,9 @@ contract TinteroLoanTest is BaseTest {
         uint16 nPayments,
         uint16 nTranches
     ) public {
+        _sanitizeAccessManagerCaller(manager);
         _sanitizeActors(borrower, beneficiary);
-        nTranches = _sanitizeTranches(nPayments, nTranches);
+        (nPayments, nTranches) = _sanitizeTranches(nPayments, nTranches);
 
         (address loan, uint256 totalPrincipal, , ) = _requestLoan(
             borrower,
@@ -544,9 +557,10 @@ contract TinteroLoanTest is BaseTest {
         uint16 nExtraPayments,
         uint16 nTranches
     ) public {
+        _sanitizeAccessManagerCaller(manager);
         _sanitizeActors(borrower, beneficiary);
         nExtraPayments = uint16(bound(nExtraPayments, 1, 1000));
-        nTranches = _sanitizeTranches(nPayments, nTranches);
+        (nPayments, nTranches) = _sanitizeTranches(nPayments, nTranches);
 
         (address loan, uint256 totalPrincipal, , ) = _requestLoan(
             borrower,
@@ -591,7 +605,7 @@ contract TinteroLoanTest is BaseTest {
         uint16 nPayments
     ) public {
         _sanitizeActors(borrower, beneficiary);
-        vm.assume(nPayments <= ARBITRARY_MAX_PAYMENTS);
+        nPayments = uint16(bound(nPayments, 0, ARBITRARY_MAX_PAYMENTS));
 
         (address loan, , , uint256[] memory collateralTokenIds) = _requestLoan(
             borrower,
@@ -600,6 +614,8 @@ contract TinteroLoanTest is BaseTest {
             nPayments,
             nPayments
         );
+
+        _sanitizeERC721Receiver(beneficiary, loan);
 
         vm.prank(beneficiary);
         TinteroLoan(loan).withdrawPaymentCollateral(0, nPayments);
@@ -617,7 +633,8 @@ contract TinteroLoanTest is BaseTest {
         address notBeneficiary
     ) public {
         _sanitizeActors(borrower, beneficiary);
-        vm.assume(nPayments <= ARBITRARY_MAX_PAYMENTS);
+        nPayments = uint16(bound(nPayments, 0, ARBITRARY_MAX_PAYMENTS));
+        vm.assume(notBeneficiary != beneficiary);
 
         (address loan, , , ) = _requestLoan(
             borrower,
@@ -639,9 +656,7 @@ contract TinteroLoanTest is BaseTest {
         uint16 nPayments,
         address collateralReceiver
     ) public {
-        vm.assume(
-            collateralReceiver != 0x4e59b44847b379578588920cA78FbF26c0B4956C
-        ); // Create2Deployer
+        _sanitizeAccessManagerCaller(manager);
         _sanitizeActors(borrower, beneficiary);
         nPayments = uint16(bound(nPayments, 1, 1000));
 
@@ -658,6 +673,7 @@ contract TinteroLoanTest is BaseTest {
                 nPayments
             );
 
+        _sanitizeERC721Receiver(collateralReceiver, loan);
         _pushTranches(manager, loan, nPayments, address(tintero), nPayments);
         _addLiquidity(totalPrincipal);
         _fund(loan, manager, nPayments);
@@ -674,7 +690,9 @@ contract TinteroLoanTest is BaseTest {
             PaymentLib.Payment memory payment = payments[0];
             skip(payment.maturityPeriod); // Skip to maturity
             currentPrincipal = payment.principal;
-            interestAccrued = payment.accruedInterest(uint48(block.timestamp));
+            interestAccrued = payment.accruedInterest(
+                uint48(vm.getBlockTimestamp())
+            );
         }
 
         if (interestAccrued > 0) {
@@ -712,13 +730,13 @@ contract TinteroLoanTest is BaseTest {
         uint16 nTranches,
         address collateralReceiver
     ) public {
+        _sanitizeAccessManagerCaller(manager);
         _sanitizeActors(borrower, beneficiary);
 
         nPayments = uint16(bound(nPayments, 1, 1000));
         nTranches = uint16(bound(nTranches, 1, 1000));
         vm.assume(nTranches <= nPayments);
 
-        vm.assume(collateralReceiver.code.length == 0); // EOAs (and also simulates ERC721Holders)
         (
             address loan,
             uint256 totalPrincipal,
@@ -731,6 +749,8 @@ contract TinteroLoanTest is BaseTest {
                 nPayments,
                 nPayments
             );
+
+        _sanitizeERC721Receiver(collateralReceiver, loan);
 
         _pushTranches(manager, loan, nTranches, address(tintero), nPayments);
         _addLiquidity(totalPrincipal);
@@ -745,7 +765,9 @@ contract TinteroLoanTest is BaseTest {
         skip(payments[payments.length - 1].maturityPeriod); // Skip to last payment maturity
         for (uint256 i = 0; i < nPayments; i++) {
             PaymentLib.Payment memory payment = payments[i];
-            interestAccrued += payment.accruedInterest(uint48(block.timestamp));
+            interestAccrued += payment.accruedInterest(
+                uint48(vm.getBlockTimestamp())
+            );
         }
 
         if (interestAccrued > 0) {
@@ -789,15 +811,14 @@ contract TinteroLoanTest is BaseTest {
         uint16 defaultThreshold,
         address repossessReceiver
     ) public {
-        vm.assume(repossessReceiver != address(0));
+        _sanitizeAccessManagerCaller(manager);
         _sanitizeActors(borrower, beneficiary);
-        nTranches = _sanitizeTranches(nPayments, nTranches);
+        (nPayments, nTranches) = _sanitizeTranches(nPayments, nTranches);
         defaultThreshold = _sanitizeDefaultThreshold(
             nPayments,
             defaultThreshold
         );
 
-        vm.assume(repossessReceiver.code.length == 0); // EOAs (and also simulates ERC721Holders)
         (
             address loan,
             uint256 totalPrincipal,
@@ -810,6 +831,9 @@ contract TinteroLoanTest is BaseTest {
                 nPayments,
                 defaultThreshold
             );
+
+        vm.assume(repossessReceiver != address(0));
+        _sanitizeERC721Receiver(repossessReceiver, loan);
 
         _pushTranches(manager, loan, nTranches, address(this), nPayments);
         _addLiquidity(totalPrincipal);
@@ -839,7 +863,6 @@ contract TinteroLoanTest is BaseTest {
         address notLiquidityProvider,
         address repossessReceiver
     ) public {
-        vm.assume(repossessReceiver != address(0));
         _sanitizeActors(borrower, beneficiary);
         nPayments = uint16(bound(nPayments, 1, 1000));
         defaultThreshold = _sanitizeDefaultThreshold(
@@ -847,7 +870,6 @@ contract TinteroLoanTest is BaseTest {
             defaultThreshold
         );
 
-        vm.assume(repossessReceiver.code.length == 0); // EOAs (and also simulates ERC721Holders)
         (address loan, , PaymentLib.Payment[] memory payments, ) = _requestLoan(
             borrower,
             beneficiary,
@@ -855,6 +877,9 @@ contract TinteroLoanTest is BaseTest {
             nPayments,
             defaultThreshold
         );
+
+        vm.assume(repossessReceiver != address(0));
+        _sanitizeERC721Receiver(repossessReceiver, loan);
 
         // Miss `defaultThreshold` payments
         PaymentLib.Payment memory lastPayment = payments[defaultThreshold - 1];

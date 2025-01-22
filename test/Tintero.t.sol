@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {IERC20Metadata} from "@openzeppelin/contracts/interfaces/IERC20Metadata.sol";
-import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
+import {IERC1967} from "@openzeppelin/contracts/interfaces/IERC1967.sol";
 import {ERC4626Test} from "erc4626-tests/ERC4626.test.sol";
 import {BaseTest} from "./Base.t.sol";
 
@@ -69,7 +69,7 @@ contract TinteroTest is BaseTest, ERC4626Test {
         uint16 nPayments
     ) public {
         _sanitizeActors(borrower, beneficiary);
-        vm.assume(nPayments <= ARBITRARY_MAX_PAYMENTS);
+        nPayments = uint16(bound(nPayments, 0, ARBITRARY_MAX_PAYMENTS));
 
         // Any borrower can request a loan to any beneficiary
         (
@@ -104,9 +104,12 @@ contract TinteroTest is BaseTest, ERC4626Test {
         uint16 nPayments,
         uint256 nExtraPayments
     ) public {
+        _sanitizeAccessManagerCaller(manager);
         _sanitizeActors(borrower, beneficiary);
-        vm.assume(nPayments <= ARBITRARY_MAX_PAYMENTS);
-        vm.assume(nExtraPayments <= ARBITRARY_MAX_PAYMENTS);
+        nPayments = uint16(bound(nPayments, 0, ARBITRARY_MAX_PAYMENTS));
+        nExtraPayments = uint16(
+            bound(nExtraPayments, 0, ARBITRARY_MAX_PAYMENTS)
+        );
 
         (address loan, , , ) = _requestLoan(
             borrower,
@@ -166,8 +169,9 @@ contract TinteroTest is BaseTest, ERC4626Test {
         uint16 nTranches,
         address trancheRecipient
     ) public {
+        _sanitizeAccessManagerCaller(manager);
         _sanitizeActors(borrower, beneficiary);
-        nTranches = _sanitizeTranches(nPayments, nTranches);
+        (nPayments, nTranches) = _sanitizeTranches(nPayments, nTranches);
 
         (address loan, , , ) = _requestLoan(
             borrower,
@@ -202,8 +206,9 @@ contract TinteroTest is BaseTest, ERC4626Test {
         uint16 nPayments,
         uint16 nTranches
     ) public {
+        _sanitizeAccessManagerCaller(manager);
         _sanitizeActors(borrower, beneficiary);
-        nTranches = _sanitizeTranches(nPayments, nTranches);
+        (nPayments, nTranches) = _sanitizeTranches(nPayments, nTranches);
 
         (address loan, uint256 totalPrincipal, , ) = _requestLoan(
             borrower,
@@ -244,14 +249,14 @@ contract TinteroTest is BaseTest, ERC4626Test {
         uint16 defaultThreshold,
         address repossessReceiver
     ) public {
+        _sanitizeAccessManagerCaller(manager);
         _sanitizeActors(borrower, beneficiary);
-        nTranches = _sanitizeTranches(nPayments, nTranches);
+        (nPayments, nTranches) = _sanitizeTranches(nPayments, nTranches);
         defaultThreshold = _sanitizeDefaultThreshold(
             nPayments,
             defaultThreshold
         );
 
-        vm.assume(repossessReceiver.code.length == 0); // EOAs (and also simulates ERC721Holders)
         (
             address loan,
             uint256 totalPrincipal,
@@ -264,6 +269,8 @@ contract TinteroTest is BaseTest, ERC4626Test {
                 nPayments,
                 defaultThreshold
             );
+
+        _sanitizeERC721Receiver(repossessReceiver, loan);
 
         _pushTranches(manager, loan, nTranches, address(this), nPayments);
         _addLiquidity(totalPrincipal);
@@ -301,8 +308,9 @@ contract TinteroTest is BaseTest, ERC4626Test {
         uint16 nPayments,
         uint16 nTranches
     ) public {
+        _sanitizeAccessManagerCaller(manager);
         _sanitizeActors(borrower, beneficiary);
-        nTranches = _sanitizeTranches(nPayments, nTranches);
+        (nPayments, nTranches) = _sanitizeTranches(nPayments, nTranches);
 
         (address loan, , , ) = _requestLoan(
             borrower,
@@ -338,7 +346,7 @@ contract TinteroTest is BaseTest, ERC4626Test {
 
         vm.prank(manager);
         vm.expectEmit(loan);
-        emit ERC1967Utils.Upgraded(newTinteroLoanImpl);
+        emit IERC1967.Upgraded(newTinteroLoanImpl);
         tintero.upgradeLoan(
             TinteroLoan(loan),
             newTinteroLoanImpl,

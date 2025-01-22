@@ -7,7 +7,7 @@ import {AccessManager} from "@openzeppelin/contracts/access/manager/AccessManage
 import {Initializable} from "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 import {IWitness, Proof} from "@WitnessCo/interfaces/IWitness.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
-import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
+import {IERC1967} from "@openzeppelin/contracts/interfaces/IERC1967.sol";
 import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 import {Endorser} from "~/Endorser.sol";
 
@@ -92,7 +92,7 @@ contract EndorserTest is BaseTest {
         endorser.setMockVal(true);
         endorser.mint(mintRequest, mockProof);
         assertEq(endorser.ownerOf(uint256(leaf)), mintRequest.to);
-        assertNotEq(block.timestamp, 0);
+        assertNotEq(vm.getBlockTimestamp(), 0);
 
         // Can't mint the same leaf again
         vm.prank(minter);
@@ -111,6 +111,7 @@ contract EndorserTest is BaseTest {
     }
 
     function testSetWitness(IWitness newWitness, address setter) public {
+        _sanitizeAccessManagerCaller(setter);
         accessManager.grantRole(WITNESS_SETTER_ROLE, setter, 0);
         vm.prank(setter);
         endorser.setWitness(newWitness);
@@ -118,12 +119,13 @@ contract EndorserTest is BaseTest {
     }
 
     function testUpgradeToAndCall(address caller) public {
+        _sanitizeAccessManagerCaller(caller);
         accessManager.grantRole(UPGRADER_ROLE, caller, 0);
         EndorserVN newEndorser = new EndorserVN();
         address newEndorserImpl = address(newEndorser);
         vm.prank(caller);
         vm.expectEmit(address(endorser));
-        emit ERC1967Utils.Upgraded(newEndorserImpl);
+        emit IERC1967.Upgraded(newEndorserImpl);
         endorser.upgradeToAndCall(
             newEndorserImpl,
             abi.encodeCall(newEndorser.initializeVN, ())

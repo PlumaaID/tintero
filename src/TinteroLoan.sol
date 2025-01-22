@@ -648,24 +648,24 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
         uint256 trancheIndex_ = currentTrancheIndex();
 
         uint96 _start;
-        uint96 _end;
+        uint96 tEnd; // i.e. trancheEnd
         address _receiver;
 
         for (
-            (_start, (_end, _receiver)) = (
+            (_start, (tEnd, _receiver)) = (
                 start.toUint96(),
                 tranche(trancheIndex_)
             );
             _start < end;
-            (_start, (_end, _receiver)) = (_end, tranche(trancheIndex_++))
+            (_start, (tEnd, _receiver)) = (tEnd, tranche(trancheIndex_++))
         ) {
             (uint256 toPay, uint256 principalPaidInPayment) = _prepareToPay(
                 _start,
-                Math.min(_end, end)
+                Math.min(tEnd, end)
             );
             principalPaid += principalPaidInPayment;
             lendingAsset().safeTransferFrom(msg.sender, _receiver, toPay);
-            if (_end >= end) break;
+            if (tEnd >= end) break;
         }
     }
 

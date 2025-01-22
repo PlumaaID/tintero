@@ -16,6 +16,7 @@ import {USDCTest} from "./USDCTest.t.sol";
 
 contract BaseTest is Test, USDCTest {
     AccessManager internal accessManager;
+    address endorserImplementation;
     EndorserMock internal endorser;
     TinteroMock internal tintero;
 
@@ -38,10 +39,11 @@ contract BaseTest is Test, USDCTest {
         super.setUp();
 
         accessManager = new AccessManager(address(this));
+        endorserImplementation = address(new EndorserMock());
         endorser = EndorserMock(
             address(
                 new ERC1967Proxy(
-                    address(new EndorserMock()),
+                    endorserImplementation,
                     abi.encodeCall(
                         Endorser.initialize,
                         (address(accessManager), WITNESS)
@@ -229,7 +231,7 @@ contract BaseTest is Test, USDCTest {
             uint32 gracePeriod = uint32((start + i + 2) * 1 days);
             payments[i] = PaymentLib.Payment(
                 100 * (start + i + 1),
-                uint48(block.timestamp),
+                uint48(vm.getBlockTimestamp()),
                 maturityPeriod,
                 gracePeriod,
                 12 * (10 ** 4), // 12% regular interest
@@ -264,13 +266,21 @@ contract BaseTest is Test, USDCTest {
     function _sanitizeTranches(
         uint256 nPayments,
         uint256 nTranches
-    ) internal pure returns (uint16 sanitizedTranches) {
-        vm.assume(nPayments <= ARBITRARY_MAX_PAYMENTS);
+    )
+        internal
+        pure
+        returns (uint16 sanitizedNPayments, uint16 sanitizedNTranches)
+    {
+        sanitizedNPayments = uint16(
+            bound(nPayments, 0, ARBITRARY_MAX_PAYMENTS)
+        );
         // There must be at least 1 tranche, otherwise reverts
-        sanitizedTranches = uint16(bound(nTranches, 1, ARBITRARY_MAX_PAYMENTS));
+        sanitizedNTranches = uint16(
+            bound(nTranches, 1, ARBITRARY_MAX_PAYMENTS)
+        );
         // There can be only as much tranches as payments
-        vm.assume(sanitizedTranches <= nPayments);
-        return sanitizedTranches;
+        vm.assume(sanitizedNTranches <= sanitizedNPayments);
+        return (sanitizedNPayments, sanitizedNTranches);
     }
 
     function _sanitizeDefaultThreshold(
@@ -281,5 +291,28 @@ contract BaseTest is Test, USDCTest {
         // otherwise it can't push tranches as it would be already defaulted
         uint16 minThreshold = 1;
         return uint16(bound(defaultThreshold, minThreshold, nPayments));
+    }
+
+    function _sanitizeAccessManagerCaller(address caller) internal view {
+        vm.assume(caller != address(accessManager)); // The manager can't call other contracts and can't have a role itself.
+    }
+
+    function _sanitizeERC721Receiver(
+        address receiver,
+        address loan
+    ) internal view {
+        // None of these implements the IERC721Receiver interface
+        vm.assume(receiver != 0x4e59b44847b379578588920cA78FbF26c0B4956C); // Create2Deployer
+        vm.assume(receiver != loan);
+        vm.assume(receiver != address(accessManager));
+        vm.assume(receiver != address(tintero));
+        vm.assume(receiver != address(endorser));
+        vm.assume(receiver != endorserImplementation);
+        vm.assume(receiver != address(this));
+        vm.assume(receiver != address(usdc));
+        vm.assume(
+            receiver != tintero.INITIAL_ERC721_COLLATERAL_LOAN_IMPLEMENTATION()
+        );
+        vm.assume(receiver != address(vm));
     }
 }
