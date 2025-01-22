@@ -29,4 +29,8 @@ contract EndorserMock is MockWitnessConsumer, Endorser {
     {
         return MockWitnessConsumer.safeVerifyProof(proof);
     }
+
+    function $_mint(address to, uint256 id) external virtual {
+        _mint(to, id);
+    }
 }
