@@ -1,6 +1,6 @@
 -include .env
 
-.PHONY: all test clean deploy fund help install snapshot format anvil scopefile
+.PHONY: all test clean deploy fund help install snapshot coverage format anvil scopefile
 
 DEFAULT_ANVIL_KEY := 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
 
@@ -17,9 +17,11 @@ update:; forge update
 
 build:; forge build
 
-test:; forge test
+test: clean; forge test
 
-snapshot:; forge snapshot
+snapshot: clean; forge snapshot
+
+coverage: clean; forge coverage --no-match-coverage "script|test"
 
 format:; forge fmt
 

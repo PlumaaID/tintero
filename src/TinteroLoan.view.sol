@@ -133,8 +133,10 @@ abstract contract TinteroLoanView is TinteroLoanStorage {
         if (current == totalPaymentsCount) return LoanState.PAID;
         if ($._canceled) return LoanState.CANCELED;
         if (_defaulted(current)) return LoanState.DEFAULTED;
-        if (fundingIndex == totalPaymentsCount) return LoanState.ONGOING;
-        if (fundingIndex != 0) return LoanState.FUNDING;
+        if (fundingIndex != 0) {
+            if (fundingIndex == totalPaymentsCount) return LoanState.ONGOING;
+            return LoanState.FUNDING;
+        }
         return LoanState.CREATED;
     }
 
@@ -147,7 +149,7 @@ abstract contract TinteroLoanView is TinteroLoanStorage {
         // If any of the following payments until the threshold is not matured, the loan is not defaulted
         for (uint256 i = current; i < defaultAt; i++) {
             (, PaymentLib.Payment memory payment_) = payment(i);
-            if (!payment_.matured()) return false;
+            if (!payment_.defaulted()) return false;
         }
 
         return true;

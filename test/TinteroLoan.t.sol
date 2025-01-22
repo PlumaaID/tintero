@@ -17,6 +17,7 @@ contract TinteroLoanTest is BaseTest {
     ) public {
         _sanitizeActors(borrower, beneficiary);
         nPayments = uint16(bound(nPayments, 0, ARBITRARY_MAX_PAYMENTS));
+        vm.assume(defaultThreshold != 0);
 
         (
             address loan,
@@ -36,6 +37,8 @@ contract TinteroLoanTest is BaseTest {
         assertEq(address(tinteroLoan.lendingAsset()), tintero.asset());
         assertEq(address(tinteroLoan.collateralAsset()), address(endorser));
         assertEq(address(tinteroLoan.liquidityProvider()), address(tintero));
+        assertEq(tinteroLoan.beneficiary(), beneficiary);
+        assertEq(tinteroLoan.defaultThreshold(), defaultThreshold);
 
         // Check payments and calculate total principal to be funded
         uint256 totalPrincipal = 0;
@@ -83,6 +86,7 @@ contract TinteroLoanTest is BaseTest {
     ) public {
         _sanitizeActors(borrower, beneficiary);
         nPayments = uint16(bound(nPayments, 0, ARBITRARY_MAX_PAYMENTS));
+        vm.assume(defaultThreshold != 0);
 
         (address loan, , , ) = _requestLoan(
             borrower,
@@ -338,7 +342,7 @@ contract TinteroLoanTest is BaseTest {
             nPayments
         );
 
-        PaymentLib.Payment[] memory lastPayments = _mockPayments(nPayments, 1);
+        PaymentLib.Payment[] memory lastPayments = _mockPayments(nPayments, 2);
         uint256[] memory lastCollateralIds = _mockCollateralIds(
             nPayments,
             2,
@@ -519,13 +523,25 @@ contract TinteroLoanTest is BaseTest {
         _sanitizeActors(borrower, beneficiary);
         (nPayments, nTranches) = _sanitizeTranches(nPayments, nTranches);
 
-        (address loan, uint256 totalPrincipal, , ) = _requestLoan(
-            borrower,
-            beneficiary,
-            bytes32(0),
-            nPayments,
-            nPayments
-        );
+        (
+            address loan,
+            uint256 totalPrincipal,
+            PaymentLib.Payment[] memory payments,
+            uint256[] memory collateralTokenIds
+        ) = _requestLoan(
+                borrower,
+                beneficiary,
+                bytes32(0),
+                nPayments,
+                nPayments
+            );
+
+        (
+            uint256 collateralTokenId,
+            PaymentLib.Payment memory firstPayment
+        ) = TinteroLoan(loan).currentPaymentFunding();
+        assertEq(firstPayment.principal, payments[0].principal); // First payment
+        assertEq(collateralTokenId, collateralTokenIds[0]);
 
         _pushTranches(manager, loan, nTranches, address(this), nPayments);
         _addLiquidity(totalPrincipal);
@@ -547,6 +563,7 @@ contract TinteroLoanTest is BaseTest {
             asset_.balanceOf(address(tintero)),
             tinteroAssetBalanceBefore - totalPrincipal
         );
+        assertEq(TinteroLoan(loan).currentFundingIndex(), nPayments);
     }
 
     function testFundNUntranchedPayments(
@@ -688,7 +705,7 @@ contract TinteroLoanTest is BaseTest {
         // Avoid stack too deep error
         {
             PaymentLib.Payment memory payment = payments[0];
-            skip(payment.maturityPeriod); // Skip to maturity
+            skip(payment.maturityPeriod + payment.gracePeriod); // Skip to default
             currentPrincipal = payment.principal;
             interestAccrued = payment.accruedInterest(
                 uint48(vm.getBlockTimestamp())
@@ -762,12 +779,16 @@ contract TinteroLoanTest is BaseTest {
         uint256 beneficiaryAssetBalanceBefore = asset_.balanceOf(beneficiary);
 
         uint256 interestAccrued = 0;
-        skip(payments[payments.length - 1].maturityPeriod); // Skip to last payment maturity
-        for (uint256 i = 0; i < nPayments; i++) {
-            PaymentLib.Payment memory payment = payments[i];
-            interestAccrued += payment.accruedInterest(
-                uint48(vm.getBlockTimestamp())
-            );
+        {
+            // Avoid stack too deep error
+            PaymentLib.Payment memory lastPayment = payments[nTranches - 1];
+            skip(lastPayment.maturityPeriod + lastPayment.gracePeriod); // Skip to last payment default
+            for (uint256 i = 0; i < nPayments; i++) {
+                PaymentLib.Payment memory payment = payments[i];
+                interestAccrued += payment.accruedInterest(
+                    uint48(vm.getBlockTimestamp())
+                );
+            }
         }
 
         if (interestAccrued > 0) {
@@ -883,7 +904,7 @@ contract TinteroLoanTest is BaseTest {
 
         // Miss `defaultThreshold` payments
         PaymentLib.Payment memory lastPayment = payments[defaultThreshold - 1];
-        skip(lastPayment.maturityPeriod);
+        skip(lastPayment.maturityPeriod + lastPayment.gracePeriod);
 
         vm.prank(notLiquidityProvider);
         vm.expectRevert();

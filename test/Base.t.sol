@@ -13,6 +13,7 @@ import {IWitness, Proof} from "@WitnessCo/interfaces/IWitness.sol";
 import {EndorserMock} from "./mocks/EndorserMock.sol";
 import {TinteroMock, Tintero} from "./mocks/TinteroMock.sol";
 import {USDCTest} from "./USDCTest.t.sol";
+import {LoanState} from "~/interfaces/ITinteroLoan.types.sol";
 
 contract BaseTest is Test, USDCTest {
     AccessManager internal accessManager;
@@ -150,6 +151,9 @@ contract BaseTest is Test, USDCTest {
 
         vm.stopPrank();
 
+        // Initial state
+        assertEq(uint8(TinteroLoan(loan).state()), uint8(LoanState.CREATED));
+
         // Calculate total principal
         for (uint256 i = 0; i < payments.length; i++)
             totalPrincipal += payments[i].principal;
@@ -210,7 +214,7 @@ contract BaseTest is Test, USDCTest {
     ) internal {
         // Miss `defaultThreshold` payments
         PaymentLib.Payment memory lastPayment = payments[defaultThreshold - 1];
-        skip(lastPayment.maturityPeriod);
+        skip(lastPayment.maturityPeriod + lastPayment.gracePeriod);
 
         vm.prank(manager);
         tintero.repossess(
