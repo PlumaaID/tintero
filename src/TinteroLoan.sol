@@ -663,11 +663,11 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
         ) {
             (uint256 toPay, uint256 principalPaidInPayment) = _prepareToPay(
                 _start,
-                _end
+                Math.min(_end, end)
             );
             principalPaid += principalPaidInPayment;
             lendingAsset().safeTransferFrom(msg.sender, _receiver, toPay);
-            if (_end == end) break;
+            if (_end >= end) break;
         }
     }
 

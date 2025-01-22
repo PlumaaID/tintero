@@ -69,7 +69,7 @@ contract TinteroTest is BaseTest, ERC4626Test {
         uint16 nPayments
     ) public {
         _sanitizeActors(borrower, beneficiary);
-        vm.assume(nPayments <= 1000);
+        vm.assume(nPayments <= ARBITRARY_MAX_PAYMENTS);
 
         // Any borrower can request a loan to any beneficiary
         (
@@ -105,8 +105,8 @@ contract TinteroTest is BaseTest, ERC4626Test {
         uint256 nExtraPayments
     ) public {
         _sanitizeActors(borrower, beneficiary);
-        vm.assume(nPayments <= 1000);
-        vm.assume(nExtraPayments <= 1000);
+        vm.assume(nPayments <= ARBITRARY_MAX_PAYMENTS);
+        vm.assume(nExtraPayments <= ARBITRARY_MAX_PAYMENTS);
 
         (address loan, , , ) = _requestLoan(
             borrower,
@@ -299,8 +299,7 @@ contract TinteroTest is BaseTest, ERC4626Test {
         address manager,
         address fakeLoan,
         uint16 nPayments,
-        uint16 nTranches,
-        address repossessReceiver
+        uint16 nTranches
     ) public {
         _sanitizeActors(borrower, beneficiary);
         nTranches = _sanitizeTranches(nPayments, nTranches);

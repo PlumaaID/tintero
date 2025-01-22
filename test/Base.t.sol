@@ -19,6 +19,8 @@ contract BaseTest is Test, USDCTest {
     EndorserMock internal endorser;
     TinteroMock internal tintero;
 
+    uint256 internal constant ARBITRARY_MAX_PAYMENTS = 1000;
+
     uint64 internal constant UPGRADER_ROLE =
         uint64(bytes8(keccak256("PlumaaID.UPGRADER")));
     uint64 internal constant PROVENANCE_AUTHORIZER_ROLE =
@@ -263,10 +265,9 @@ contract BaseTest is Test, USDCTest {
         uint256 nPayments,
         uint256 nTranches
     ) internal pure returns (uint16 sanitizedTranches) {
-        uint256 arbitraryMaxPayments = 1000;
-        vm.assume(nPayments <= arbitraryMaxPayments);
+        vm.assume(nPayments <= ARBITRARY_MAX_PAYMENTS);
         // There must be at least 1 tranche, otherwise reverts
-        sanitizedTranches = uint16(bound(nTranches, 1, arbitraryMaxPayments));
+        sanitizedTranches = uint16(bound(nTranches, 1, ARBITRARY_MAX_PAYMENTS));
         // There can be only as much tranches as payments
         vm.assume(sanitizedTranches <= nPayments);
         return sanitizedTranches;
