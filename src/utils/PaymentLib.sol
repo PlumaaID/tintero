@@ -101,7 +101,7 @@ library PaymentLib {
         uint48 since,
         uint48 at
     ) private pure returns (uint256) {
-        uint48 elapsed = since - at;
+        uint48 elapsed = at - since;
         return
             Math.mulDiv(self.principal * rate, elapsed, YEAR_IN_SECONDS) /
             INTEREST_SCALE;

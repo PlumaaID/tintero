@@ -7,6 +7,8 @@ import {TinteroLoan} from "~/TinteroLoan.sol";
 import {PaymentLib} from "~/utils/PaymentLib.sol";
 
 contract TinteroLoanTest is BaseTest {
+    using PaymentLib for PaymentLib.Payment;
+
     function testLoanCreation(
         address borrower,
         address beneficiary,
@@ -261,8 +263,9 @@ contract TinteroLoanTest is BaseTest {
         uint16 nTranches,
         address trancheRecipient
     ) public {
-        vm.assume(nTranches <= nPayments);
         vm.assume(nPayments <= 300);
+        nTranches = uint16(bound(nTranches, 1, 300));
+        vm.assume(nTranches <= nPayments);
 
         vm.assume(borrower != address(this));
         vm.assume(manager != address(this));
@@ -282,7 +285,13 @@ contract TinteroLoanTest is BaseTest {
         (
             uint96[] memory paymentIndexes,
             address[] memory recipients
-        ) = _pushTranches(manager, loan, nTranches, trancheRecipient);
+        ) = _pushTranches(
+                manager,
+                loan,
+                nTranches,
+                trancheRecipient,
+                nPayments
+            );
 
         // Check tranches
         for (uint256 i = 0; i < paymentIndexes.length; i++) {
@@ -331,7 +340,7 @@ contract TinteroLoanTest is BaseTest {
             nPayments
         );
 
-        _pushTranches(manager, loan, nTranches, address(this));
+        _pushTranches(manager, loan, nTranches, address(this), nPayments);
         _addLiquidity(totalPrincipal);
 
         IERC20 asset_ = IERC20(TinteroLoan(loan).lendingAsset());
@@ -351,6 +360,89 @@ contract TinteroLoanTest is BaseTest {
             asset_.balanceOf(address(tintero)),
             tinteroAssetBalanceBefore - totalPrincipal
         );
+    }
+
+    function testPayN(
+        address borrower,
+        address beneficiary,
+        address manager,
+        uint16 nPayments,
+        uint16 nTranches,
+        address collateralReceiver
+    ) public {
+        nPayments = uint16(bound(nPayments, 2, 20));
+        nTranches = uint16(bound(nTranches, 1, 20));
+        vm.assume(nTranches <= nPayments);
+
+        vm.assume(borrower != address(this));
+        vm.assume(manager != address(this));
+
+        // Can't be 0 or transfer will fail
+        vm.assume(borrower != address(0));
+        vm.assume(beneficiary != address(0));
+        vm.assume(collateralReceiver != address(0));
+
+        vm.assume(collateralReceiver != address(this));
+        vm.assume(collateralReceiver.code.length == 0); // EOAs (and also simulates ERC721Holders)
+        (
+            address loan,
+            uint256 totalPrincipal,
+            PaymentLib.Payment[] memory payments,
+            uint256[] memory collateralTokenIds
+        ) = _requestLoan(
+                borrower,
+                beneficiary,
+                bytes32(0),
+                nPayments,
+                nPayments
+            );
+
+        _pushTranches(manager, loan, nTranches, address(tintero), nPayments);
+        _addLiquidity(totalPrincipal);
+        _fund(loan, manager, nPayments);
+
+        IERC20 asset_ = IERC20(TinteroLoan(loan).lendingAsset());
+
+        uint256 tinteroAssetBalanceBefore = asset_.balanceOf(address(tintero));
+        uint256 beneficiaryAssetBalanceBefore = asset_.balanceOf(beneficiary);
+
+        uint256 interestAccrued = 0;
+        skip(payments[payments.length - 1].maturityPeriod); // Skip to last payment maturity
+        for (uint256 i = 0; i < nPayments; i++) {
+            PaymentLib.Payment memory payment = payments[i];
+            interestAccrued += payment.accruedInterest(uint48(block.timestamp));
+        }
+
+        if (interestAccrued > 0) {
+            // Make sure user has enough to pay interests
+            _mintUSDCTo(beneficiary, interestAccrued);
+            beneficiaryAssetBalanceBefore += interestAccrued;
+        }
+
+        // Pay all payments
+        vm.prank(beneficiary);
+        usdc.approve(address(loan), totalPrincipal + interestAccrued);
+        vm.prank(beneficiary);
+        TinteroLoan(loan).repayN(nPayments, collateralReceiver);
+
+        // Actual assets are transferred to the liquidity provider
+        assertEq(
+            tinteroAssetBalanceBefore + totalPrincipal + interestAccrued,
+            asset_.balanceOf(address(tintero))
+        );
+        assertEq(
+            asset_.balanceOf(address(beneficiary)),
+            beneficiaryAssetBalanceBefore - totalPrincipal - interestAccrued
+        );
+
+        // Check collateral tokens are transferred to the collateral receiver
+        for (uint256 i = 0; i < collateralTokenIds.length; i++) {
+            if (collateralReceiver == address(0)) vm.expectRevert();
+            assertEq(
+                endorser.ownerOf(collateralTokenIds[i]),
+                collateralReceiver
+            );
+        }
     }
 
     function testRepossess(
@@ -373,6 +465,7 @@ contract TinteroLoanTest is BaseTest {
         // Can't be 0 or transfer will fail
         vm.assume(borrower != address(0));
         vm.assume(beneficiary != address(0));
+        vm.assume(repossessReceiver != address(0));
 
         vm.assume(repossessReceiver != address(this));
         vm.assume(repossessReceiver.code.length == 0); // EOAs (and also simulates ERC721Holders)
@@ -389,7 +482,7 @@ contract TinteroLoanTest is BaseTest {
                 defaultThreshold
             );
 
-        _pushTranches(manager, loan, nTranches, address(this));
+        _pushTranches(manager, loan, nTranches, address(this), nPayments);
         _addLiquidity(totalPrincipal);
         _fund(loan, manager, nPayments);
         _repossess(
@@ -401,10 +494,11 @@ contract TinteroLoanTest is BaseTest {
         );
 
         // Check collateral tokens are transferred to the repossess receiver
-        for (uint256 i = 0; i < collateralTokenIds.length; i++)
+        for (uint256 i = 0; i < collateralTokenIds.length; i++) {
             assertEq(
                 endorser.ownerOf(collateralTokenIds[i]),
                 repossessReceiver
             );
+        }
     }
 }

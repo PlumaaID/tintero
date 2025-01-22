@@ -177,8 +177,9 @@ contract TinteroTest is BaseTest, ERC4626Test {
         uint16 nTranches,
         address trancheRecipient
     ) public {
-        vm.assume(nTranches <= nPayments);
         vm.assume(nPayments <= 300);
+        nTranches = uint16(bound(nTranches, 1, 300));
+        vm.assume(nTranches <= nPayments);
 
         vm.assume(borrower != address(this));
         vm.assume(manager != address(this));
@@ -198,7 +199,13 @@ contract TinteroTest is BaseTest, ERC4626Test {
         (
             uint96[] memory paymentIndexes,
             address[] memory recipients
-        ) = _pushTranches(manager, loan, nTranches, trancheRecipient);
+        ) = _pushTranches(
+                manager,
+                loan,
+                nTranches,
+                trancheRecipient,
+                nPayments
+            );
 
         // Must revert if the address is not a loan
         vm.prank(manager);
@@ -233,7 +240,7 @@ contract TinteroTest is BaseTest, ERC4626Test {
             nPayments
         );
 
-        _pushTranches(manager, loan, nTranches, address(this));
+        _pushTranches(manager, loan, nTranches, address(this), nPayments);
         _addLiquidity(totalPrincipal);
 
         uint256 reportedAssetsBefore = tintero.totalAssets();
@@ -291,7 +298,7 @@ contract TinteroTest is BaseTest, ERC4626Test {
                 defaultThreshold
             );
 
-        _pushTranches(manager, loan, nTranches, address(this));
+        _pushTranches(manager, loan, nTranches, address(this), nPayments);
         _addLiquidity(totalPrincipal);
         _fund(loan, manager, nPayments);
 

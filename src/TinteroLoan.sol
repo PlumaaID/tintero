@@ -156,7 +156,7 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
     /// Requirements:
     ///
     /// - The loan MUST be in CREATED or FUNDING state.
-    /// - There MUST be at least 1 tranche defined.
+    /// - Tranches MUST include all payments.
     /// - The caller MUST have enough funds to fund the payments
     /// - This contract mus have been approved to transfer the principal
     ///   amount from the caller.
@@ -172,7 +172,8 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
         if (n == 0) return; // No-op
 
         // Checks
-        if (totalTranches() <= 0) revert EmptyTranches();
+        (uint256 lastPaymentIndex, ) = tranche(totalTranches() - 1); // Will overflow if totalTranches() == 0
+        if (lastPaymentIndex != totalPayments()) revert UntranchedPayments();
         _validateStateBitmap(
             _encodeStateBitmap(LoanState.CREATED) |
                 _encodeStateBitmap(LoanState.FUNDING)
@@ -556,8 +557,8 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
         address collateralReceiver
     ) internal {
         LoanStorage storage $ = getTinteroLoanStorage();
-        $.currentPaymentIndex = end.toUint16();
         uint256 principalPaid = _repayByTranches(start, end);
+        $.currentPaymentIndex = end.toUint16();
         _debitCollateral(start, end, collateralReceiver, principalPaid);
     }
 
@@ -647,33 +648,26 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
         uint256 end
     ) private returns (uint256 principalPaid) {
         uint256 trancheIndex_ = currentTrancheIndex();
-        (uint96 tranchePaymentIndex_, address trancheReceiver_) = tranche(
-            trancheIndex_
-        );
 
-        assert(tranchePaymentIndex_ >= start);
+        uint96 _start;
+        uint96 _end;
+        address _receiver;
 
-        uint256 totalTranches_ = totalTranches();
-        uint96 nextTranchePaymentIndex_;
-        address nextTrancheReceiver_;
-
-        while (start < end) {
-            assert(tranchePaymentIndex_ <= totalTranches_);
-            (nextTranchePaymentIndex_, nextTrancheReceiver_) = tranche(
-                ++trancheIndex_ // Next tranche
+        for (
+            (_start, (_end, _receiver)) = (
+                start.toUint96(),
+                tranche(trancheIndex_)
             );
+            _start < end;
+            (_start, (_end, _receiver)) = (_end, tranche(trancheIndex_++))
+        ) {
             (uint256 toPay, uint256 principalPaidInPayment) = _prepareToPay(
-                start,
-                nextTranchePaymentIndex_
+                _start,
+                _end
             );
             principalPaid += principalPaidInPayment;
-            lendingAsset().safeTransferFrom(
-                msg.sender,
-                trancheReceiver_,
-                toPay
-            );
-            start = nextTranchePaymentIndex_;
-            trancheReceiver_ = nextTrancheReceiver_;
+            lendingAsset().safeTransferFrom(msg.sender, _receiver, toPay);
+            if (_end == end) break;
         }
     }
 

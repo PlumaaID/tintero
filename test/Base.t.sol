@@ -155,17 +155,24 @@ contract BaseTest is Test, USDCTest {
         address manager,
         address loan,
         uint16 nTranches,
-        address trancheRecipient
+        address trancheRecipient,
+        uint16 lastPaymentIndex
     )
         internal
         returns (uint96[] memory paymentIndexes, address[] memory recipients)
     {
         paymentIndexes = new uint96[](nTranches);
         recipients = new address[](nTranches);
-        for (uint256 i = 0; i < nTranches; i++) {
+        uint256 last = nTranches - 1;
+        for (uint256 i = 0; i < last; i++) {
             paymentIndexes[i] = uint96(i + 1);
             recipients[i] = trancheRecipient;
         }
+
+        // Fill the last tranche so that it covers all payments
+        paymentIndexes[last] = lastPaymentIndex;
+        recipients[last] = trancheRecipient;
+
         // Must revert if the borrower is not a manager (role not assigned yet)
         vm.prank(manager);
         vm.expectRevert();

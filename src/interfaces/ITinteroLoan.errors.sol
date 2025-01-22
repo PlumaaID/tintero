@@ -36,8 +36,8 @@ interface ITinteroLoanErrors {
     /// @dev There are more tranches than payments
     error TooManyTranches();
 
-    /// @dev The loan attempted to be funded without defining any tranche.
-    error EmptyTranches();
+    /// @dev The current tranches do not include all payments.
+    error UntranchedPayments();
 
     /// @dev The current state of the loan is not the required for performing an operation.
     /// The `expectedStates` is a bitmap with the bits enabled for each LoanState enum position

@@ -156,7 +156,7 @@ interface ITinteroLoan is ITinteroLoanEvents, ITinteroLoanErrors {
     /// Requirements:
     ///
     /// - The loan MUST be in CREATED or FUNDING state.
-    /// - There MUST be at least 1 tranche defined.
+    /// - Tranches MUST include all payments.
     /// - The caller MUST have enough funds to fund the payments
     /// - This contract mus have been approved to transfer the principal
     ///   amount from the caller.
