@@ -15,12 +15,8 @@ contract TinteroLoanTest is BaseTest {
         uint16 nPayments,
         uint16 defaultThreshold
     ) public {
-        vm.assume(nPayments <= 300);
-
-        vm.assume(borrower != address(this));
-
-        // Can't be 0 or transfer will fail
-        vm.assume(borrower != address(0));
+        _sanitizeActors(borrower, beneficiary);
+        vm.assume(nPayments <= 1000);
 
         (
             address loan,
@@ -85,13 +81,8 @@ contract TinteroLoanTest is BaseTest {
         uint16 nPayments,
         uint16 defaultThreshold
     ) public {
-        vm.assume(nPayments <= 300);
-
-        vm.assume(borrower != address(this));
-
-        // Can't be 0 or transfer will fail
-        vm.assume(borrower != address(0));
-        vm.assume(beneficiary != address(0));
+        _sanitizeActors(borrower, beneficiary);
+        vm.assume(nPayments <= 1000);
 
         (address loan, , , ) = _requestLoan(
             borrower,
@@ -115,12 +106,7 @@ contract TinteroLoanTest is BaseTest {
         uint16 nPayments,
         uint16 defaultThreshold
     ) public {
-        vm.assume(nPayments <= 300);
-
-        vm.assume(borrower != address(this));
-
-        // Can't be 0 or transfer will fail
-        vm.assume(borrower != address(0));
+        vm.assume(nPayments <= 1000);
 
         PaymentLib.Payment[] memory payments = _mockPayments(0, nPayments);
         uint256[] memory collateralTokenIds = _mockCollateralIds(
@@ -147,15 +133,9 @@ contract TinteroLoanTest is BaseTest {
         uint16 nPayments,
         uint16 nExtraPayments
     ) public {
-        vm.assume(nPayments <= 300);
-        vm.assume(nExtraPayments <= 300);
-
-        vm.assume(borrower != address(this));
-        vm.assume(manager != address(this));
-
-        // Can't be 0 or transfer will fail
-        vm.assume(borrower != address(0));
-        vm.assume(beneficiary != address(0));
+        _sanitizeActors(borrower, beneficiary);
+        vm.assume(nPayments <= 1000);
+        vm.assume(nExtraPayments <= 1000);
 
         (
             address loan,
@@ -263,16 +243,8 @@ contract TinteroLoanTest is BaseTest {
         uint16 nTranches,
         address trancheRecipient
     ) public {
-        vm.assume(nPayments <= 300);
-        nTranches = uint16(bound(nTranches, 1, 300));
-        vm.assume(nTranches <= nPayments);
-
-        vm.assume(borrower != address(this));
-        vm.assume(manager != address(this));
-
-        // Can't be 0 or transfer will fail
-        vm.assume(borrower != address(0));
-        vm.assume(beneficiary != address(0));
+        _sanitizeActors(borrower, beneficiary);
+        nTranches = _sanitizeTranches(nPayments, nTranches);
 
         (address loan, , , ) = _requestLoan(
             borrower,
@@ -321,16 +293,8 @@ contract TinteroLoanTest is BaseTest {
         uint16 nPayments,
         uint16 nTranches
     ) public {
-        vm.assume(nPayments <= 300);
-        nTranches = uint16(bound(nTranches, 1, 300));
-        vm.assume(nTranches <= nPayments);
-
-        vm.assume(borrower != address(this));
-        vm.assume(manager != address(this));
-
-        // Can't be 0 or transfer will fail
-        vm.assume(borrower != address(0));
-        vm.assume(beneficiary != address(0));
+        _sanitizeActors(borrower, beneficiary);
+        nTranches = _sanitizeTranches(nPayments, nTranches);
 
         (address loan, uint256 totalPrincipal, , ) = _requestLoan(
             borrower,
@@ -370,19 +334,13 @@ contract TinteroLoanTest is BaseTest {
         uint16 nTranches,
         address collateralReceiver
     ) public {
-        nPayments = uint16(bound(nPayments, 2, 20));
-        nTranches = uint16(bound(nTranches, 1, 20));
+        vm.assume(collateralReceiver != address(0));
+        _sanitizeActors(borrower, beneficiary);
+
+        nPayments = uint16(bound(nPayments, 1, 1000));
+        nTranches = uint16(bound(nTranches, 1, 1000));
         vm.assume(nTranches <= nPayments);
 
-        vm.assume(borrower != address(this));
-        vm.assume(manager != address(this));
-
-        // Can't be 0 or transfer will fail
-        vm.assume(borrower != address(0));
-        vm.assume(beneficiary != address(0));
-        vm.assume(collateralReceiver != address(0));
-
-        vm.assume(collateralReceiver != address(this));
         vm.assume(collateralReceiver.code.length == 0); // EOAs (and also simulates ERC721Holders)
         (
             address loan,
@@ -454,13 +412,12 @@ contract TinteroLoanTest is BaseTest {
         uint16 defaultThreshold,
         address repossessReceiver
     ) public {
-        nPayments = uint16(bound(nPayments, 2, 300));
-        nTranches = uint16(bound(nTranches, 1, 300));
-        vm.assume(nTranches <= nPayments);
-        defaultThreshold = uint16(bound(defaultThreshold, 1, nPayments - 1));
-
-        vm.assume(borrower != address(this));
-        vm.assume(manager != address(this));
+        _sanitizeActors(borrower, beneficiary);
+        nTranches = _sanitizeTranches(nPayments, nTranches);
+        defaultThreshold = _sanitizeDefaultThreshold(
+            nPayments,
+            defaultThreshold
+        );
 
         // Can't be 0 or transfer will fail
         vm.assume(borrower != address(0));

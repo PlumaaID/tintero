@@ -46,6 +46,7 @@ abstract contract TinteroLoanView is TinteroLoanStorage {
     /// @dev Get the index of the current tranche.
     function currentTrancheIndex() public view returns (uint256) {
         return
+            // Last (most recent) tranche for current payment index
             getTinteroLoanStorage()._tranches.upperLookup(
                 currentPaymentIndex().toUint96()
             );
@@ -141,7 +142,7 @@ abstract contract TinteroLoanView is TinteroLoanStorage {
         uint256 threshold = defaultThreshold();
         uint256 defaultAt = current + threshold;
 
-        if (defaultAt >= totalPayments()) return false; // Cannot default if there are no more payments
+        if (defaultAt > totalPayments()) return false; // Cannot default if there are no more payments
 
         // If any of the following payments until the threshold is not matured, the loan is not defaulted
         for (uint256 i = current; i < defaultAt; i++) {

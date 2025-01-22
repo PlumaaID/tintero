@@ -205,7 +205,7 @@ contract BaseTest is Test, USDCTest {
         address repossessReceiver
     ) internal {
         // Miss `defaultThreshold` payments
-        PaymentLib.Payment memory lastPayment = payments[defaultThreshold];
+        PaymentLib.Payment memory lastPayment = payments[defaultThreshold - 1];
         skip(lastPayment.maturityPeriod);
 
         vm.prank(manager);
@@ -248,5 +248,37 @@ contract BaseTest is Test, USDCTest {
             endorser.$_mint(owner, start + i);
         }
         return collateralTokenIds;
+    }
+
+    function _sanitizeActors(
+        address borrower,
+        address beneficiary
+    ) internal pure {
+        // Can't be 0 or transfer will fail
+        vm.assume(borrower != address(0)); // Reverts collecting collateral
+        vm.assume(beneficiary != address(0)); // Reverts transferring the lent asset
+    }
+
+    function _sanitizeTranches(
+        uint256 nPayments,
+        uint256 nTranches
+    ) internal pure returns (uint16 sanitizedTranches) {
+        uint256 arbitraryMaxPayments = 1000;
+        vm.assume(nPayments <= arbitraryMaxPayments);
+        // There must be at least 1 tranche, otherwise reverts
+        sanitizedTranches = uint16(bound(nTranches, 1, arbitraryMaxPayments));
+        // There can be only as much tranches as payments
+        vm.assume(sanitizedTranches <= nPayments);
+        return sanitizedTranches;
+    }
+
+    function _sanitizeDefaultThreshold(
+        uint16 nPayments,
+        uint16 defaultThreshold
+    ) internal pure returns (uint16 sanitizedDefaultThreshold) {
+        // Must be at least 1 so that there's at least 1 payment
+        // otherwise it can't push tranches as it would be already defaulted
+        uint16 minThreshold = 1;
+        return uint16(bound(defaultThreshold, minThreshold, nPayments));
     }
 }
