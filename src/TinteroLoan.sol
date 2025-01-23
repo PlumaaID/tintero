@@ -468,6 +468,7 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
         $.currentFundingIndex = end.toUint24();
 
         uint256 totalPrincipal = 0;
+        bytes32 cachePtr = _getFreePointer();
         for (uint256 i = start; i < end; i++) {
             (
                 uint256 collateralTokenId,
@@ -476,6 +477,7 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
             totalPrincipal += payment_.principal;
             emit FundedPayment(i, collateralTokenId, payment_.principal);
         }
+        _setFreePointer(cachePtr);
 
         return totalPrincipal;
     }
@@ -501,10 +503,12 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
             getTinteroLoanStorage()._canceled = true;
 
         // Interactions
+        bytes32 cachePtr = _getFreePointer();
         for (uint256 i = start; i < end; i++) {
             (uint256 tokenId, PaymentLib.Payment memory payment_) = payment(i);
             emit WithdrawnPayment(i, tokenId, payment_.principal);
         }
+        _setFreePointer(cachePtr);
 
         _debitCollateral(start, end, beneficiary(), 0);
     }
@@ -560,11 +564,13 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
 
         uint256 principalRepossessed = 0;
 
+        bytes32 cachePtr = _getFreePointer();
         for (uint256 i = start; i < end; i++) {
             (uint256 tokenId, PaymentLib.Payment memory payment_) = payment(i);
             principalRepossessed += payment_.principal;
             emit RepossessedPayment(i, tokenId, payment_.principal);
         }
+        _setFreePointer(cachePtr);
 
         _debitCollateral(start, end, receiver, principalRepossessed);
     }
@@ -658,6 +664,7 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
         uint256 start,
         uint256 end
     ) private returns (uint256 toPay, uint256 principalPaid) {
+        bytes32 cachePtr = _getFreePointer();
         for (uint256 i = start; i < end; i++) {
             (
                 uint256 collateralTokenId,
@@ -674,6 +681,7 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
                 payment_.premiumAccruedInterest(timepoint)
             );
         }
+        _setFreePointer(cachePtr);
     }
 
     /// @dev Disposes the collateral from payments. Burns the collateral if `collateralReceiver` is the zero address.
@@ -704,6 +712,22 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
                 );
 
             // No need to update heldTokenIds since they can't be transferred back anymore
+        }
+    }
+
+    /// @dev Returns a memory pointer to the current free memory pointer.
+    function _getFreePointer() private pure returns (bytes32 ptr) {
+        assembly ("memory-safe") {
+            ptr := mload(0x40)
+        }
+    }
+
+    /// @dev Sets the free memory pointer to a specific value.
+    ///
+    /// WARNING: Everything after the pointer may be overwritten.
+    function _setFreePointer(bytes32 ptr) private pure {
+        assembly ("memory-safe") {
+            mstore(0x40, ptr)
         }
     }
 }
