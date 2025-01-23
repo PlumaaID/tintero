@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.20;
 
+import {console2} from "forge-std/console2.sol";
 import {Test} from "forge-std/Test.sol";
 import {Endorser} from "~/Endorser.sol";
 import {TinteroLoanFactory, TinteroLoan} from "~/TinteroLoan.factory.sol";
@@ -74,6 +75,12 @@ contract BaseTest is Test, USDCTest {
         selectors[2] = Tintero.fundN.selector;
         selectors[3] = Tintero.repossess.selector;
         selectors[4] = Tintero.upgradeLoan.selector;
+
+        console2.logBytes4(selectors[0]);
+        console2.logBytes4(selectors[1]);
+        console2.logBytes4(selectors[2]);
+        console2.logBytes4(selectors[3]);
+        console2.logBytes4(selectors[4]);
 
         accessManager.setTargetFunctionRole(
             target,
