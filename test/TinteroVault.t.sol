@@ -9,7 +9,7 @@ import {BaseTest} from "./Base.t.sol";
 import {PaymentLib} from "~/utils/PaymentLib.sol";
 import {TinteroLoan} from "~/TinteroLoan.factory.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import {TinteroMock, Tintero} from "./mocks/TinteroMock.sol";
+import {TinteroVaultMock, TinteroVault} from "./mocks/TinteroVaultMock.sol";
 
 contract TinteroLoanVN is TinteroLoan {
     function initializeVN() public reinitializer(2) {}
@@ -31,14 +31,14 @@ contract ERC20Mock is ERC20 {
     }
 }
 
-contract TinteroTest is BaseTest, ERC4626Test {
+contract TinteroVaultTest is BaseTest, ERC4626Test {
     ERC20 private _underlying = new ERC20Mock();
 
     function setUp() public override(BaseTest, ERC4626Test) {
         super.setUp();
         _underlying_ = address(_underlying);
         _vault_ = address(
-            new TinteroMock(
+            new TinteroVaultMock(
                 IERC20Metadata(_underlying_),
                 address(accessManager)
             )
@@ -84,7 +84,7 @@ contract TinteroTest is BaseTest, ERC4626Test {
 
         // Fails creating the loan again
         vm.startPrank(borrower);
-        vm.expectRevert(Tintero.DuplicatedLoan.selector);
+        vm.expectRevert(TinteroVault.DuplicatedLoan.selector);
         tintero.requestLoan(
             address(endorser),
             beneficiary,

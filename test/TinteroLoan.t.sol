@@ -512,6 +512,84 @@ contract TinteroLoanTest is BaseTest {
         );
     }
 
+    function testPushTranchesRevertUnincreasingTranchePaymentIndex(
+        address borrower,
+        address beneficiary,
+        address manager,
+        uint24 nPayments,
+        uint24 nTranches,
+        address trancheRecipient
+    ) public {
+        _sanitizeAccessManagerCaller(manager);
+        _sanitizeActors(borrower, beneficiary);
+        (nPayments, nTranches) = _sanitizeTranches(nPayments, nTranches);
+        vm.assume(nTranches > 1);
+
+        (address loan, , , ) = _requestLoan(
+            borrower,
+            beneficiary,
+            bytes32(0),
+            nPayments,
+            nPayments
+        );
+
+        uint96[] memory paymentIndexes = new uint96[](nTranches);
+        address[] memory recipients = new address[](nTranches);
+        uint256 last = nTranches - 1;
+        for (uint256 i = 0; i < last; i++) {
+            paymentIndexes[i] = uint96(i + 1);
+            recipients[i] = trancheRecipient;
+        }
+
+        paymentIndexes[last] = paymentIndexes[last - 1]; // Unincreasing
+
+        // Grant manager role
+        accessManager.grantRole(TINTERO_MANAGER_ROLE, manager, 0);
+
+        // Manager pushes tranches
+        vm.prank(manager);
+        vm.expectRevert();
+        tintero.pushTranches(TinteroLoan(loan), paymentIndexes, recipients);
+    }
+
+    function testPushTranchesTooManyTranches(
+        address borrower,
+        address beneficiary,
+        address manager,
+        uint24 nPayments,
+        uint24 nTranches,
+        address trancheRecipient
+    ) public {
+        _sanitizeAccessManagerCaller(manager);
+        _sanitizeActors(borrower, beneficiary);
+        (nPayments, nTranches) = _sanitizeTranches(nPayments, nTranches);
+
+        (address loan, , , ) = _requestLoan(
+            borrower,
+            beneficiary,
+            bytes32(0),
+            nPayments,
+            nPayments
+        );
+
+        nTranches = nPayments + 1;
+
+        uint96[] memory paymentIndexes = new uint96[](nTranches);
+        address[] memory recipients = new address[](nTranches);
+        for (uint256 i = 0; i < nTranches; i++) {
+            paymentIndexes[i] = uint96(i + 1);
+            recipients[i] = trancheRecipient;
+        }
+
+        // Grant manager role
+        accessManager.grantRole(TINTERO_MANAGER_ROLE, manager, 0);
+
+        // Manager pushes tranches
+        vm.prank(manager);
+        vm.expectRevert();
+        tintero.pushTranches(TinteroLoan(loan), paymentIndexes, recipients);
+    }
+
     function testFundN(
         address borrower,
         address beneficiary,

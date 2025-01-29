@@ -12,7 +12,7 @@ import {IERC20Metadata} from "@openzeppelin/contracts/interfaces/IERC20Metadata.
 import {UUPSUpgradeable} from "@openzeppelin/contracts/proxy/utils/UUPSUpgradeable.sol";
 import {IWitness, Proof} from "@WitnessCo/interfaces/IWitness.sol";
 import {EndorserMock} from "./mocks/EndorserMock.sol";
-import {TinteroMock, Tintero} from "./mocks/TinteroMock.sol";
+import {TinteroVaultMock, TinteroVault} from "./mocks/TinteroVaultMock.sol";
 import {USDCTest} from "./USDCTest.t.sol";
 import {LoanState} from "~/interfaces/ITinteroLoan.types.sol";
 
@@ -20,7 +20,7 @@ contract BaseTest is Test, USDCTest {
     AccessManager internal accessManager;
     address endorserImplementation;
     EndorserMock internal endorser;
-    TinteroMock internal tintero;
+    TinteroVaultMock internal tintero;
 
     uint256 internal constant ARBITRARY_MAX_PAYMENTS = 100;
 
@@ -54,7 +54,7 @@ contract BaseTest is Test, USDCTest {
             )
         );
 
-        tintero = new TinteroMock(
+        tintero = new TinteroVaultMock(
             IERC20Metadata(address(usdc)),
             address(accessManager)
         );
@@ -70,17 +70,11 @@ contract BaseTest is Test, USDCTest {
 
     function _setupManagerRole(address target) internal {
         bytes4[] memory selectors = new bytes4[](5);
-        selectors[0] = Tintero.pushPayments.selector;
-        selectors[1] = Tintero.pushTranches.selector;
-        selectors[2] = Tintero.fundN.selector;
-        selectors[3] = Tintero.repossess.selector;
-        selectors[4] = Tintero.upgradeLoan.selector;
-
-        console2.logBytes4(selectors[0]);
-        console2.logBytes4(selectors[1]);
-        console2.logBytes4(selectors[2]);
-        console2.logBytes4(selectors[3]);
-        console2.logBytes4(selectors[4]);
+        selectors[0] = TinteroVault.pushPayments.selector;
+        selectors[1] = TinteroVault.pushTranches.selector;
+        selectors[2] = TinteroVault.fundN.selector;
+        selectors[3] = TinteroVault.repossess.selector;
+        selectors[4] = TinteroVault.upgradeLoan.selector;
 
         accessManager.setTargetFunctionRole(
             target,

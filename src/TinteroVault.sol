@@ -56,7 +56,11 @@ import {IPaymentCallback} from "./interfaces/IPaymentCallback.sol";
 /// - `fundN`: Funds `n` payments from a Loan contract.
 /// - `repossess`: Repossess a range of payments from a Loan contract and cancels it. The Vault will
 ///   receive the ERC721 tokens and will cancel the tracked assets lent (absorbing the loss).
-contract Tintero is ERC4626, TinteroLoanFactory, IPaymentCallback {
+///
+/// @author Ernesto García
+///
+/// @custom:security-contact security@plumaa.id
+contract TinteroVault is ERC4626, TinteroLoanFactory, IPaymentCallback {
     using SafeERC20 for IERC20Metadata;
     using EnumerableSet for EnumerableSet.AddressSet;
 

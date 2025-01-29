@@ -3,13 +3,13 @@ pragma solidity ^0.8.20;
 
 import {IERC20Metadata} from "@openzeppelin/contracts/interfaces/IERC20Metadata.sol";
 
-import {Tintero} from "~/Tintero.sol";
+import {TinteroVault} from "~/TinteroVault.sol";
 
-contract TinteroMock is Tintero {
+contract TinteroVaultMock is TinteroVault {
     constructor(
         IERC20Metadata asset_,
         address authority_
-    ) Tintero(asset_, authority_) {}
+    ) TinteroVault(asset_, authority_) {}
 
     function _decimalsOffset() internal pure override returns (uint8) {
         // Reset to 0 to pass property test.

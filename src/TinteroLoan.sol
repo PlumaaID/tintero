@@ -49,6 +49,10 @@ import {LoanState} from "./interfaces/ITinteroLoan.types.sol";
 /// This may allow a malicious actor to transfer request a loan and transferring their tokens
 /// to this contract unexpectedly. For those cases, the original owner can retake their collateral
 /// with the `withdrawPaymentCollateral` function.
+///
+/// @author Ernesto García
+///
+/// @custom:security-contact security@plumaa.id
 contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
     using SafeERC20 for IERC20;
     using EnumerableSet for EnumerableSet.UintSet;
@@ -378,6 +382,7 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
             uint96 paymentIndex = paymentIndexes_[i];
             if (paymentIndex <= lastIndex)
                 revert UnincreasingTranchePaymentIndex();
+            lastIndex = paymentIndex;
             $._tranches.push(paymentIndex, uint160(recipients_[i]));
             emit CreatedTranche(
                 totalTranches_ + i,

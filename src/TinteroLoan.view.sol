@@ -33,7 +33,7 @@ abstract contract TinteroLoanView is TinteroLoanStorage {
     }
 
     /// @dev Get the index at which the tranche starts and its recipient.
-    /// A tranche is a collection of payments from [paymentIndex ?? 0, nextPaymentIndex)
+    /// A tranche is a collection of payments from [previousPaymentIndex ?? 0, paymentIndex).
     function tranche(
         uint256 trancheIndex
     ) public view returns (uint96 paymentIndex, address recipient) {
