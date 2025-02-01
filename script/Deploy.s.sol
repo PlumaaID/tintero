@@ -23,9 +23,9 @@ contract Deploy is BaseScript {
     address public constant ENDORSER_ADDRESS =
         0x0000c908D1104caD2867Ec2A8Bb178D78C9bAaaa;
     address public constant TINTERO_VAULT_USDC_ARBITRUM =
-        0x0000c635B91a73dd4Ee11e27c216Ab866AbCaAAa;
+        0x0000E6dc74a870C3e1c875D23725Be07b8F8aaaa;
     address public constant TINTERO_VAULT_USDC_ARBITRUM_SEPOLIA =
-        0x00001E99B72BAcD5b563fBB5d74CBe1d3e95AAaA;
+        0x0000568428eC80B2c9d950904f2718796304AaAa;
 
     // From https://docs.witness.co/additional-notes/deployments
     IWitness public constant WITNESS =
@@ -89,14 +89,14 @@ contract Deploy is BaseScript {
             if (TINTERO_VAULT_USDC_ARBITRUM.code.length > 0)
                 return TINTERO_VAULT_USDC_ARBITRUM; // Already deployed
             usdc = 0xaf88d065e77c8cC2239327C5EDb3A432268e5831;
-            mined = 0x9bcac83a3b705903cddb3e;
+            mined = 0xc38566a522760c022a1922;
             expectedAddress = TINTERO_VAULT_USDC_ARBITRUM;
         }
         if (block.chainid == 421614) {
             if (TINTERO_VAULT_USDC_ARBITRUM_SEPOLIA.code.length > 0)
                 return TINTERO_VAULT_USDC_ARBITRUM_SEPOLIA; // Already deployed
             usdc = 0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d;
-            mined = 0x8a4fa73e0d365200cd48ab;
+            mined = 0xae6cfdfd1ab5a900598df5;
             expectedAddress = TINTERO_VAULT_USDC_ARBITRUM_SEPOLIA;
         }
         if (usdc == address(0)) {
