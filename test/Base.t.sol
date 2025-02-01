@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.20;
 
-import {console2} from "forge-std/console2.sol";
 import {Test} from "forge-std/Test.sol";
 import {Endorser} from "~/Endorser.sol";
 import {TinteroLoanFactory, TinteroLoan} from "~/TinteroLoan.factory.sol";
@@ -32,6 +31,8 @@ contract BaseTest is Test, USDCTest {
         uint64(bytes8(keccak256("PlumaaID.WITNESS_SETTER")));
     uint64 internal constant TINTERO_MANAGER_ROLE =
         uint64(bytes8(keccak256("PlumaaID.TINTERO_MANAGER")));
+    uint64 internal constant TINTERO_INVESTOR_ROLE =
+        uint64(bytes8(keccak256("PlumaaID.TINTERO_INVESTOR")));
 
     // From https://docs.witness.co/additional-notes/deployments
     IWitness constant WITNESS =
@@ -60,6 +61,7 @@ contract BaseTest is Test, USDCTest {
         );
 
         _setupManagerRole(address(tintero));
+        _setupTinteroInvestorRole(address(tintero));
         _setupWitnessSetterRole(address(endorser));
         _setupUpgradeRole(address(endorser));
     }
@@ -80,6 +82,18 @@ contract BaseTest is Test, USDCTest {
             target,
             selectors,
             TINTERO_MANAGER_ROLE
+        );
+    }
+
+    function _setupTinteroInvestorRole(address target) internal {
+        bytes4[] memory selectors = new bytes4[](2);
+        selectors[0] = TinteroVault.deposit.selector;
+        selectors[1] = TinteroVault.mint.selector;
+
+        accessManager.setTargetFunctionRole(
+            target,
+            selectors,
+            TINTERO_INVESTOR_ROLE
         );
     }
 
@@ -198,6 +212,7 @@ contract BaseTest is Test, USDCTest {
     function _addLiquidity(uint256 amount) internal {
         _mintUSDCTo(address(this), amount);
         usdc.approve(address(tintero), amount);
+        accessManager.grantRole(TINTERO_INVESTOR_ROLE, address(this), 0); // Grant investor role
         tintero.deposit(amount, address(this));
     }
 

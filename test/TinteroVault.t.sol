@@ -48,6 +48,15 @@ contract TinteroVaultTest is BaseTest, ERC4626Test {
         _unlimitedAmount = true;
     }
 
+    // Assume every user is an accredited investor for ERC4626 tests
+    function setUpVault(Init memory init) public override {
+        _setupTinteroInvestorRole(_vault_);
+        for (uint256 i = 0; i < init.user.length; i++) {
+            accessManager.grantRole(TINTERO_INVESTOR_ROLE, init.user[i], 0);
+        }
+        super.setUpVault(init);
+    }
+
     function testMetadata() public view {
         assertEq(tintero.name(), "Tinted USD Coin");
         assertEq(tintero.symbol(), "tUSDC");

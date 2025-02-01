@@ -57,6 +57,12 @@ import {IPaymentCallback} from "./interfaces/IPaymentCallback.sol";
 /// - `repossess`: Repossess a range of payments from a Loan contract and cancels it. The Vault will
 ///   receive the ERC721 tokens and will cancel the tracked assets lent (absorbing the loss).
 ///
+/// == KYC and Accredited Investors
+///
+/// The `mint` and `deposit` functions are restricted to accredited investors that require a KYC check
+/// before providing liqudity. However, the `withdraw` and `redeem` functions are permissionless, so
+/// investors can withdraw their assets at any time as long as the vault has enough liquidity.
+///
 /// @author Ernesto García
 ///
 /// @custom:security-contact security@plumaa.id
@@ -81,7 +87,7 @@ contract TinteroVault is ERC4626, TinteroLoanFactory, IPaymentCallback {
         _;
     }
 
-    /// @dev Constructor for Tintero.
+    /// @dev Constructor for Tintero Vault.
     ///
     /// @param asset_ The ERC20 token to be lent.
     /// @param authority_ The access manager for the vault.
@@ -140,6 +146,26 @@ contract TinteroVault is ERC4626, TinteroLoanFactory, IPaymentCallback {
             );
     }
 
+    /**************************/
+    /*** Investor Functions ***/
+    /**************************/
+
+    /// @dev Deposit assets. Restricted to accredited investors.
+    function deposit(
+        uint256 assets,
+        address receiver
+    ) public override restricted returns (uint256) {
+        return super.deposit(assets, receiver);
+    }
+
+    /// @dev Mints shares. Restricted to accredited investors.
+    function mint(
+        uint256 shares,
+        address receiver
+    ) public override restricted returns (uint256) {
+        return super.mint(shares, receiver);
+    }
+
     /**********************/
     /*** Loan Functions ***/
     /**********************/
@@ -148,7 +174,7 @@ contract TinteroVault is ERC4626, TinteroLoanFactory, IPaymentCallback {
     /// Must be called by the Loan contract when a payment is either:
     ///
     /// - Repaid (value is accrued through interest)
-    /// - Repossesses (value is lost)
+    /// - Repossessed (value is lost)
     function onDebit(uint256 principal) external onlyLoan(msg.sender) {
         _lentTo[msg.sender] -= principal;
         _totalAssetsLent -= principal;
@@ -186,6 +212,8 @@ contract TinteroVault is ERC4626, TinteroLoanFactory, IPaymentCallback {
     /// Requirements:
     ///
     /// - The loan MUST be created by this vault.
+    /// - Those of SafeERC20.safeIncreaseAllowance.
+    /// - Those of Loan#pushPayments.
     function pushPayments(
         TinteroLoan loan,
         uint256[] calldata collateralTokenIds,
@@ -199,6 +227,7 @@ contract TinteroVault is ERC4626, TinteroLoanFactory, IPaymentCallback {
     /// Requirements:
     ///
     /// - The loan MUST be created by this vault.
+    /// - Those of Loan#pushTranches.
     function pushTranches(
         TinteroLoan loan,
         uint96[] calldata paymentIndexes,
@@ -230,7 +259,8 @@ contract TinteroVault is ERC4626, TinteroLoanFactory, IPaymentCallback {
     /// Requirements:
     ///
     /// - The loan MUST be created by this vault.
-    /// - The receiver must implement IERC721Receiver to receive the collateral.
+    /// - The receiver must implement IERC721Receiver to receive the collateral (if contract).
+    /// - Those of Loan#repossess.
     function repossess(
         TinteroLoan loan,
         uint256 start,
@@ -245,6 +275,7 @@ contract TinteroVault is ERC4626, TinteroLoanFactory, IPaymentCallback {
     /// Requirements:
     ///
     /// - The loan MUST be created by this vault.
+    /// - Those of Loan#upgradeToAndCall.
     function upgradeLoan(
         TinteroLoan loan,
         address newImplementation,
