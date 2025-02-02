@@ -152,7 +152,12 @@ contract BaseTest is Test, USDCTest {
 
         // Loan event must be emitted
         vm.expectEmit(address(tintero));
-        emit TinteroLoanFactory.LoanCreated(loan);
+        emit TinteroLoanFactory.LoanCreated(
+            loan,
+            address(endorser),
+            beneficiary,
+            defaultThreshold
+        );
 
         // Execute loan request
         tintero.requestLoan(

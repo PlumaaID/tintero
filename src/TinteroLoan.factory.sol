@@ -10,7 +10,12 @@ import {TinteroLoan} from "./TinteroLoan.sol";
 
 abstract contract TinteroLoanFactory is AccessManaged {
     /// @dev Emitted when a Loan contract is created by this vault.
-    event LoanCreated(address loan);
+    event LoanCreated(
+        address loan,
+        address collateralCollection,
+        address beneficiary,
+        uint24 defaultThreshold
+    );
 
     using Create2 for *;
 
@@ -59,7 +64,12 @@ abstract contract TinteroLoanFactory is AccessManaged {
 
         if (predicted.code.length == 0) {
             Create2.deploy(0, _salt(salt, msg.sender), bytecode);
-            emit LoanCreated(predicted);
+            emit LoanCreated(
+                predicted,
+                collateralCollection_,
+                beneficiary_,
+                defaultThreshold_
+            );
         }
 
         return predicted;
