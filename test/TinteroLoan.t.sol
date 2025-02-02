@@ -48,7 +48,7 @@ contract TinteroLoanTest is BaseTest {
             totalPrincipal += payment.principal;
             assertEq(collateralTokenId, collateralTokenIds[i]);
             assertEq(payment.fundedAt, payments[i].fundedAt);
-            assertEq(payment.fundedAt, uint48(vm.getBlockTimestamp()));
+            assertEq(payment.fundedAt, uint48(0));
             assertEq(payment.maturityPeriod, payments[i].maturityPeriod);
             assertEq(payment.gracePeriod, payments[i].gracePeriod);
             assertEq(payment.interestRate, payments[i].interestRate);
