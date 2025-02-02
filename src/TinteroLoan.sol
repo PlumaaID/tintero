@@ -477,13 +477,11 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
         $.currentFundingIndex = end.toUint24();
 
         uint256 totalPrincipal = 0;
-        bytes32 cachePtr = _getFreePointer();
         uint48 fundedAt = Time.timestamp();
         for (uint256 i = start; i < end; i++) {
             $.payments[i].fundedAt = fundedAt;
             totalPrincipal += $.payments[i].principal;
         }
-        _setFreePointer(cachePtr);
         emit PaymentsFunded(start, end);
 
         return totalPrincipal;
@@ -565,11 +563,9 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
 
         uint256 principalRepossessed = 0;
 
-        bytes32 cachePtr = _getFreePointer();
         for (uint256 i = start; i < end; i++) {
             principalRepossessed += payment(i).principal;
         }
-        _setFreePointer(cachePtr);
         emit PaymentsRepossessed(receiver, start, end);
 
         _debitCollateral(start, end, receiver, principalRepossessed);
@@ -664,14 +660,12 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
         uint256 start,
         uint256 end
     ) private returns (uint256 toPay, uint256 principalPaid) {
-        bytes32 cachePtr = _getFreePointer();
         for (uint256 i = start; i < end; i++) {
             PaymentLib.Payment memory payment_ = payment(i);
             uint48 timepoint = Time.timestamp();
             principalPaid += payment_.principal;
             toPay += payment_.principal + payment_.accruedInterest(timepoint);
         }
-        _setFreePointer(cachePtr);
         emit PaymentsRepaid(start, end);
     }
 
@@ -702,22 +696,6 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
                 );
 
             // No need to update heldTokenIds since they can't be transferred back anymore
-        }
-    }
-
-    /// @dev Returns a memory pointer to the current free memory pointer.
-    function _getFreePointer() private pure returns (bytes32 ptr) {
-        assembly ("memory-safe") {
-            ptr := mload(0x40)
-        }
-    }
-
-    /// @dev Sets the free memory pointer to a specific value.
-    ///
-    /// WARNING: Everything after the pointer may be overwritten.
-    function _setFreePointer(bytes32 ptr) private pure {
-        assembly ("memory-safe") {
-            mstore(0x40, ptr)
         }
     }
 }
