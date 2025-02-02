@@ -43,14 +43,12 @@ contract TinteroLoanTest is BaseTest {
         // Check payments and calculate total principal to be funded
         uint256 totalPrincipal = 0;
         for (uint256 i = 0; i < payments.length; i++) {
-            (
-                uint256 collateralTokenId,
-                PaymentLib.Payment memory payment
-            ) = tinteroLoan.payment(i);
+            uint256 collateralTokenId = tinteroLoan.collateralId(i);
+            PaymentLib.Payment memory payment = tinteroLoan.payment(i);
             totalPrincipal += payment.principal;
             assertEq(collateralTokenId, collateralTokenIds[i]);
-            assertEq(payment.creation, payments[i].creation);
-            assertEq(payment.creation, uint48(vm.getBlockTimestamp()));
+            assertEq(payment.fundedAt, payments[i].fundedAt);
+            assertEq(payment.fundedAt, uint48(vm.getBlockTimestamp()));
             assertEq(payment.maturityPeriod, payments[i].maturityPeriod);
             assertEq(payment.gracePeriod, payments[i].gracePeriod);
             assertEq(payment.interestRate, payments[i].interestRate);
@@ -61,12 +59,13 @@ contract TinteroLoanTest is BaseTest {
         assertEq(tinteroLoan.totalPayments(), nPayments);
         assertEq(tinteroLoan.currentPaymentIndex(), 0);
         if (nPayments > 0) {
-            (
-                uint256 currentCollateralId,
-                PaymentLib.Payment memory currentPayment
-            ) = tinteroLoan.currentPayment();
+            uint256 index = tinteroLoan.currentPaymentIndex();
+            uint256 currentCollateralId = tinteroLoan.collateralId(index);
+            PaymentLib.Payment memory currentPayment = tinteroLoan.payment(
+                index
+            );
             assertEq(currentCollateralId, collateralTokenIds[0]);
-            assertEq(currentPayment.creation, payments[0].creation);
+            assertEq(currentPayment.fundedAt, payments[0].fundedAt);
             assertEq(currentPayment.maturityPeriod, payments[0].maturityPeriod);
             assertEq(currentPayment.gracePeriod, payments[0].gracePeriod);
             assertEq(currentPayment.interestRate, payments[0].interestRate);
@@ -187,13 +186,11 @@ contract TinteroLoanTest is BaseTest {
 
         // Check payments
         for (uint256 i = 0; i < payments.length; i++) {
-            (
-                uint256 collateralTokenId,
-                PaymentLib.Payment memory payment
-            ) = TinteroLoan(loan).payment(i);
+            uint256 collateralTokenId = TinteroLoan(loan).collateralId(i);
+            PaymentLib.Payment memory payment = TinteroLoan(loan).payment(i);
             assertEq(collateralTokenId, collateralTokenIds[i]);
-            assertEq(payment.creation, payments[i].creation);
-            assertEq(payment.creation, uint48(vm.getBlockTimestamp()));
+            assertEq(payment.fundedAt, payments[i].fundedAt);
+            assertEq(payment.fundedAt, uint48(vm.getBlockTimestamp()));
             assertEq(payment.maturityPeriod, payments[i].maturityPeriod);
             assertEq(payment.gracePeriod, payments[i].gracePeriod);
             assertEq(payment.interestRate, payments[i].interestRate);
@@ -204,14 +201,14 @@ contract TinteroLoanTest is BaseTest {
         assertEq(TinteroLoan(loan).totalPayments(), nPayments + nExtraPayments);
         assertEq(TinteroLoan(loan).currentPaymentIndex(), 0);
         if (nPayments + nExtraPayments > 0) {
-            (
-                uint256 currentCollateralId,
-                PaymentLib.Payment memory currentPayment
-            ) = TinteroLoan(loan).currentPayment();
+            uint256 index = TinteroLoan(loan).currentPaymentIndex();
+            uint256 currentCollateralId = TinteroLoan(loan).collateralId(index);
+            PaymentLib.Payment memory currentPayment = TinteroLoan(loan)
+                .payment(index);
             if (nPayments > 0) {
                 // Payments were added first
                 assertEq(currentCollateralId, collateralTokenIds[0]);
-                assertEq(currentPayment.creation, payments[0].creation);
+                assertEq(currentPayment.fundedAt, payments[0].fundedAt);
                 assertEq(
                     currentPayment.maturityPeriod,
                     payments[0].maturityPeriod
@@ -222,7 +219,7 @@ contract TinteroLoanTest is BaseTest {
             } else {
                 // First payments list is empty
                 assertEq(currentCollateralId, lastCollateralIds[0]);
-                assertEq(currentPayment.creation, lastPayments[0].creation);
+                assertEq(currentPayment.fundedAt, lastPayments[0].fundedAt);
                 assertEq(
                     currentPayment.maturityPeriod,
                     lastPayments[0].maturityPeriod
@@ -256,7 +253,9 @@ contract TinteroLoanTest is BaseTest {
         nExtraPayments = uint24(
             bound(nExtraPayments, 0, ARBITRARY_MAX_PAYMENTS)
         );
-        nExtraPayments = uint24(bound(nExtraPayments, 1, 1000));
+        nExtraPayments = uint24(
+            bound(nExtraPayments, 1, ARBITRARY_MAX_PAYMENTS)
+        );
 
         (address loan, , , ) = _requestLoan(
             borrower,
@@ -439,13 +438,14 @@ contract TinteroLoanTest is BaseTest {
         }
 
         // Check state consistency
+        uint256 trancheIndex = TinteroLoan(loan).currentTrancheIndex();
+        assertEq(trancheIndex, 0);
         assertEq(TinteroLoan(loan).totalTranches(), nTranches);
-        assertEq(TinteroLoan(loan).currentTrancheIndex(), 0);
         if (nTranches > 0) {
             (
                 uint96 currentPaymentIndex,
                 address currentRecipient
-            ) = TinteroLoan(loan).currentTranche();
+            ) = TinteroLoan(loan).tranche(trancheIndex);
             assertEq(currentPaymentIndex, paymentIndexes[0]);
             assertEq(currentRecipient, recipients[0]);
         }
@@ -614,10 +614,12 @@ contract TinteroLoanTest is BaseTest {
                 nPayments
             );
 
-        (
-            uint256 collateralTokenId,
-            PaymentLib.Payment memory firstPayment
-        ) = TinteroLoan(loan).currentPaymentFunding();
+        uint256 collateralTokenId = TinteroLoan(loan).collateralId(
+            TinteroLoan(loan).currentFundingIndex()
+        );
+        PaymentLib.Payment memory firstPayment = TinteroLoan(loan).payment(
+            TinteroLoan(loan).currentFundingIndex()
+        );
         assertEq(firstPayment.principal, payments[0].principal); // First payment
         assertEq(collateralTokenId, collateralTokenIds[0]);
 
@@ -654,7 +656,9 @@ contract TinteroLoanTest is BaseTest {
     ) public {
         _sanitizeAccessManagerCaller(manager);
         _sanitizeActors(borrower, beneficiary);
-        nExtraPayments = uint24(bound(nExtraPayments, 1, 1000));
+        nExtraPayments = uint24(
+            bound(nExtraPayments, 1, ARBITRARY_MAX_PAYMENTS)
+        );
         (nPayments, nTranches) = _sanitizeTranches(nPayments, nTranches);
 
         (address loan, uint256 totalPrincipal, , ) = _requestLoan(
@@ -753,7 +757,7 @@ contract TinteroLoanTest is BaseTest {
     ) public {
         _sanitizeAccessManagerCaller(manager);
         _sanitizeActors(borrower, beneficiary);
-        nPayments = uint24(bound(nPayments, 1, 1000));
+        nPayments = uint24(bound(nPayments, 1, ARBITRARY_MAX_PAYMENTS));
 
         (
             address loan,
@@ -828,8 +832,8 @@ contract TinteroLoanTest is BaseTest {
         _sanitizeAccessManagerCaller(manager);
         _sanitizeActors(borrower, beneficiary);
 
-        nPayments = uint24(bound(nPayments, 1, 1000));
-        nTranches = uint24(bound(nTranches, 1, 1000));
+        nPayments = uint24(bound(nPayments, 1, ARBITRARY_MAX_PAYMENTS));
+        nTranches = uint24(bound(nTranches, 1, ARBITRARY_MAX_PAYMENTS));
         vm.assume(nTranches <= nPayments);
 
         (
@@ -963,7 +967,7 @@ contract TinteroLoanTest is BaseTest {
         address repossessReceiver
     ) public {
         _sanitizeActors(borrower, beneficiary);
-        nPayments = uint24(bound(nPayments, 1, 1000));
+        nPayments = uint24(bound(nPayments, 1, ARBITRARY_MAX_PAYMENTS));
         defaultThreshold = _sanitizeDefaultThreshold(
             nPayments,
             defaultThreshold

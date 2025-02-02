@@ -16,17 +16,16 @@ import {Time} from "@openzeppelin/contracts/utils/types/Time.sol";
 library PaymentLib {
     using PaymentLib for Payment;
 
-    uint256 private constant INTEREST_SCALE = 1e6; // ie. 6 decimal places
+    uint256 private constant INTEREST_SCALE = 1e4; // ie. 4 decimal places
     uint256 private constant YEAR_IN_SECONDS = 365 days;
 
     struct Payment {
-        uint256 principal;
-        uint48 creation; // Up to the year 8,925,512
+        uint96 principal; // Up to ~79,228,162,514 for 18 decimals
+        uint48 fundedAt; // Up to the year 8,925,512
         uint32 maturityPeriod; // Up to ~136 years
         uint32 gracePeriod; // Up to ~136 years
-        uint32 interestRate; // Up to ~4294% annualized
-        uint32 premiumRate; // Up to ~4294% annualized
-        // 80 bits gap
+        uint24 interestRate; // Up to ~1677% annualized
+        uint24 premiumRate; // Up to ~1677% annualized
     }
 
     /// @dev Whether the principal is due.
@@ -44,7 +43,7 @@ library PaymentLib {
 
     /// @dev The time when the principal is due.
     function maturedAt(Payment memory self) internal pure returns (uint48) {
-        return self.creation + self.maturityPeriod;
+        return self.fundedAt + self.maturityPeriod;
     }
 
     /// @dev Whether the payment is defaulted.
@@ -79,9 +78,9 @@ library PaymentLib {
         Payment memory self,
         uint48 at
     ) internal pure returns (uint256) {
-        uint48 creation = self.creation;
-        if (at < creation) return 0;
-        return _accruedInterest(self, self.interestRate, creation, at);
+        uint48 fundedAt = self.fundedAt;
+        if (at < fundedAt) return 0;
+        return _accruedInterest(self, self.interestRate, fundedAt, at);
     }
 
     /// @dev The total amount of premium interest accrued.
@@ -94,7 +93,7 @@ library PaymentLib {
     }
 
     /// @dev Linear interpolation of the interest linearly accrued between two timepoints.
-    /// Precision is maintained by scaling the rate by 1e6.
+    /// Precision is maintained by scaling the rate by 1e4.
     function _accruedInterest(
         Payment memory self,
         uint88 rate,

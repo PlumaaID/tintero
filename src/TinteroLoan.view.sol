@@ -52,15 +52,6 @@ abstract contract TinteroLoanView is TinteroLoanStorage {
             );
     }
 
-    /// @dev Get the current tranche.
-    function currentTranche()
-        public
-        view
-        returns (uint96 paymentIndex, address recipient)
-    {
-        return tranche(currentTrancheIndex());
-    }
-
     /// @dev Total tranches in the loan.
     function totalTranches() public view returns (uint256) {
         return getTinteroLoanStorage()._tranches.length();
@@ -69,27 +60,18 @@ abstract contract TinteroLoanView is TinteroLoanStorage {
     /// @dev Get payment details. A Payment is a struct with a principal and interest terms.
     function payment(
         uint256 index
-    )
-        public
-        view
-        returns (uint256 collateralTokenId, PaymentLib.Payment memory)
-    {
-        LoanStorage storage $ = getTinteroLoanStorage();
-        return ($.collateralTokenIds[index], $.payments[index]);
+    ) public view returns (PaymentLib.Payment memory) {
+        return getTinteroLoanStorage().payments[index];
+    }
+
+    /// @dev Get the collateral tokenId for a payment.
+    function collateralId(uint256 index) public view returns (uint256) {
+        return getTinteroLoanStorage().collateralTokenIds[index];
     }
 
     /// @dev Get the index of the current payment yet to be repaid.
     function currentPaymentIndex() public view returns (uint256) {
         return getTinteroLoanStorage().currentPaymentIndex;
-    }
-
-    /// @dev Get the payment at which the loan is currently at and its collateral tokenId.
-    function currentPayment()
-        public
-        view
-        returns (uint256 collateralTokenId, PaymentLib.Payment memory)
-    {
-        return payment(currentPaymentIndex());
     }
 
     /// @dev Get the total number of payments.
@@ -100,15 +82,6 @@ abstract contract TinteroLoanView is TinteroLoanStorage {
     /// @dev Get the index of the current payment yet to be funded.
     function currentFundingIndex() public view returns (uint256) {
         return getTinteroLoanStorage().currentFundingIndex;
-    }
-
-    /// dev Get the current payment yet to be funded.
-    function currentPaymentFunding()
-        public
-        view
-        returns (uint256 collateralTokenId, PaymentLib.Payment memory)
-    {
-        return payment(currentFundingIndex());
     }
 
     /// @dev Address of the beneficiary of the loan.
@@ -148,8 +121,7 @@ abstract contract TinteroLoanView is TinteroLoanStorage {
 
         // If any of the following payments until the threshold is not matured, the loan is not defaulted
         for (uint256 i = current; i < defaultAt; i++) {
-            (, PaymentLib.Payment memory payment_) = payment(i);
-            if (!payment_.defaulted()) return false;
+            if (!payment(i).defaulted()) return false;
         }
 
         return true;

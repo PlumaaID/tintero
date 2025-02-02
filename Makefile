@@ -19,6 +19,8 @@ build:; forge build
 
 test: clean; forge test
 
+gas-report: clean; forge test --gas-report
+
 snapshot: clean; forge snapshot
 
 coverage: clean; forge coverage --no-match-coverage "script|test"

@@ -249,14 +249,14 @@ contract BaseTest is Test, USDCTest {
     function _mockPayments(
         uint256 start,
         uint256 n
-    ) internal view returns (PaymentLib.Payment[] memory) {
+    ) internal pure returns (PaymentLib.Payment[] memory) {
         PaymentLib.Payment[] memory payments = new PaymentLib.Payment[](n);
         for (uint256 i = 0; i < payments.length; i++) {
             uint32 maturityPeriod = uint32((start + i + 1) * 1 days);
             uint32 gracePeriod = uint32((start + i + 2) * 1 days);
             payments[i] = PaymentLib.Payment(
-                100 * (start + i + 1),
-                uint48(vm.getBlockTimestamp()),
+                uint96(100 * (start + i + 1)),
+                uint48(0),
                 maturityPeriod,
                 gracePeriod,
                 12 * (10 ** 4), // 12% regular interest

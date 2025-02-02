@@ -6,6 +6,9 @@ import {LoanState} from "./ITinteroLoan.types.sol";
 
 /// @dev Errors for the ERC721 Collateral Loan.
 interface ITinteroLoanErrors {
+    /// @dev The loan is already funded so it can't be funded again.
+    error PaymentFunded(uint256 tokenId);
+
     /// @dev The payment is already matured so it can't be added to the loan.
     error PaymentMatured(uint256 tokenId);
 

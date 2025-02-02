@@ -122,7 +122,7 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
     /// - The `collateralTokenIds` are transferred to this contract.
     /// - The `payment` function will return the added payments at their corresponding
     ///   indexes starting at `totalPayments`.
-    /// - Emits a `CreatedPayment` event for each payment added.
+    /// - Emits a `PaymentCreated` event for each payment added.
     function pushPayments(
         uint256[] calldata collateralTokenIds,
         PaymentLib.Payment[] calldata payment_
@@ -151,7 +151,7 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
     /// - The `tranche` function will return the added tranches at their corresponding
     ///   indexes starting at `totalTranches`.
     /// - The tranches are added to the loan.
-    /// - Emits a `CreatedTranche` event for each tranche added.
+    /// - Emits a `TrancheCreated` event for each tranche added.
     function pushTranches(
         uint96[] calldata paymentIndexes,
         address[] calldata recipients
@@ -176,7 +176,8 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
     /// - Moves to ONGOING state if all payments are funded.
     /// - The `currentFundingIndex` is incremented by `n` or the remaining payments.
     /// - The principal of the funded payments is transferred from the liquidity provider to the beneficiary.
-    /// - Emits a `FundedPayment` event for each payment funded.
+    /// - Sets the `fundedAt` field of the funded payments to the current block timestamp.
+    /// - Emits a `PaymentsFunded` event with the range of funded payments.
     function fundN(uint256 n) external {
         if (n == 0) return; // No-op
 
@@ -212,7 +213,7 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
     ///
     /// - Moves to CANCELED state.
     /// - Each payment collateral is transferred to the beneficiary.
-    /// - Emits a `WithdrawnPayment` event for each payment withdrawn.
+    /// - Emits a `PaymentsWithdrawn` with the range of payments withdrawn
     function withdrawPaymentCollateral(
         uint256 start,
         uint256 end
@@ -247,7 +248,7 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
     /// - The `currentPaymentIndex` is incremented by `n` or the remaining payments.
     /// - The principal of the repaid payments is transferred from the sender to the receiver of each payment tranche
     /// - The collateral is transferred to the collateralReceiver if provided, otherwise it is burned.
-    /// - Emits a `RepaidPayment` event for each payment repaid.
+    /// - Emits a `PaymentsRepaid` event with the range of repaid payments.
     function repayN(uint256 n, address collateralReceiver) public {
         // Checks
         _validateStateBitmap(
@@ -276,7 +277,7 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
     ///
     /// - Moves to REPOSSESSED state.
     /// - The collateral is transferred to the receiver.
-    /// - Emits a `RepossessedPayment` event for each payment repossessed.
+    /// - Emits a `PaymentsRepossessed` event with the range of repossessed payments.
     function repossess(
         uint256 start,
         uint256 end,
@@ -301,6 +302,7 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
     ///
     /// - The collateral tokenIds and payments arrays MUST have the same length.
     /// - The payments MUST be ordered by maturity date.
+    /// - The payments `fundedAt` field MUST be 0.
     /// - The payments MUST NOT have matured.
     /// - The collateral tokenIds MUST NOT have been added before.
     /// - The collateralTokenIds MUST exist.
@@ -313,7 +315,7 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
     /// - The `collateralTokenIds` are transferred to this contract.
     /// - The `payment` function will return the added payments at their corresponding
     ///   indexes starting at `totalPayments`.
-    /// - Emits a `CreatedPayment` event for each payment added.
+    /// - Emits a `PaymentCreated` event for each payment added.
     function _validatePushPaymentsAndCollectCollateral(
         uint256[] calldata collateralTokenIds_,
         PaymentLib.Payment[] calldata payments_
@@ -327,8 +329,7 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
         uint256 latestMaturity = 0;
 
         if (totalPayments_ > 0) {
-            (, PaymentLib.Payment memory latest) = payment(totalPayments_ - 1);
-            latestMaturity = latest.maturedAt();
+            latestMaturity = payment(totalPayments_ - 1).maturedAt();
         }
 
         // Checks and Effects
@@ -364,7 +365,7 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
     /// - The `tranche` function will return the added tranches at their corresponding
     ///   indexes starting at `totalTranches`.
     /// - The tranches are added to the loan.
-    /// - Emits a `CreatedTranche` event for each tranche added.
+    /// - Emits a `TrancheCreated` event for each tranche added.
     function _validateAndPushTranches(
         uint96[] calldata paymentIndexes_,
         address[] calldata recipients_
@@ -384,7 +385,7 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
                 revert UnincreasingTranchePaymentIndex();
             lastIndex = paymentIndex;
             $._tranches.push(paymentIndex, uint160(recipients_[i]));
-            emit CreatedTranche(
+            emit TrancheCreated(
                 totalTranches_ + i,
                 paymentIndex,
                 recipients_[i]
@@ -398,6 +399,7 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
     ///
     /// Requirements:
     ///
+    /// - The payment `fundedAt` field MUST be 0.
     /// - The payment maturity date MUST NOT be before the latest maturity.
     /// - The payment MUST NOT have matured.
     /// - The collateral tokenId MUST not have been added before.
@@ -406,7 +408,7 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
     ///
     /// - The `totalPayments` is incremented by 1.
     /// - The `payment` function will return the added `_payment` after the current `totalPayments`.
-    /// - Emits a `CreatedPayment` event.
+    /// - Emits a `PaymentCreated` event.
     function _validatePushPayment(
         uint256 i,
         uint256 latestMaturity,
@@ -414,6 +416,7 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
         PaymentLib.Payment calldata payment_
     ) internal returns (uint256) {
         // Checks
+        if (payment_.fundedAt != 0) revert PaymentFunded(collateralTokenId);
         uint256 maturedAt = payment_.maturedAt();
         if (maturedAt < latestMaturity) revert UnorderedPayments();
         if (
@@ -427,7 +430,7 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
             revert DuplicatedCollateral(collateralTokenId);
         $.payments.push(payment_);
         $.collateralTokenIds.push(collateralTokenId);
-        emit CreatedPayment(i, collateralTokenId, payment_);
+        emit PaymentCreated(i, collateralTokenId, payment_);
         return maturedAt;
     }
 
@@ -464,6 +467,7 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
     /// - Moves to ONGOING state if all payments are funded.
     /// - The `currentFundingIndex` is incremented by `n` or the remaining payments.
     /// - The principal of the funded payments is transferred from the liquidity provider to the beneficiary.
+    /// - Sets the `fundedAt` field of the funded payments to the current block timestamp.
     function _fundN(uint256 n) internal returns (uint256) {
         uint256 start = currentFundingIndex();
         uint256 totalPayments_ = totalPayments();
@@ -474,15 +478,13 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
 
         uint256 totalPrincipal = 0;
         bytes32 cachePtr = _getFreePointer();
+        uint48 fundedAt = Time.timestamp();
         for (uint256 i = start; i < end; i++) {
-            (
-                uint256 collateralTokenId,
-                PaymentLib.Payment memory payment_
-            ) = payment(i);
-            totalPrincipal += payment_.principal;
-            emit FundedPayment(i, collateralTokenId, payment_.principal);
+            $.payments[i].fundedAt = fundedAt;
+            totalPrincipal += $.payments[i].principal;
         }
         _setFreePointer(cachePtr);
+        emit PaymentsFunded(start, end);
 
         return totalPrincipal;
     }
@@ -497,7 +499,7 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
     ///
     /// - Moves to CANCELED state.
     /// - The payment collateral is transferred to the beneficiary.
-    /// - Emits a `WithdrawnPayment` event.
+    /// - Emits a `PaymentsWithdrawn` event.
     function _withdrawPaymentCollateral(
         LoanState state_,
         uint256 start,
@@ -508,14 +510,8 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
             getTinteroLoanStorage()._canceled = true;
 
         // Interactions
-        bytes32 cachePtr = _getFreePointer();
-        for (uint256 i = start; i < end; i++) {
-            (uint256 tokenId, PaymentLib.Payment memory payment_) = payment(i);
-            emit WithdrawnPayment(i, tokenId, payment_.principal);
-        }
-        _setFreePointer(cachePtr);
-
         _debitCollateral(start, end, beneficiary(), 0);
+        emit PaymentsWithdrawn(start, end);
     }
 
     /// @dev Repays the current loan and `n` future payments.
@@ -533,7 +529,7 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
     /// - The `currentPaymentIndex` is incremented by `n` or the remaining payments.
     /// - The principal of the repaid payments is transferred from the sender to the receiver of each payment tranche
     /// - The collateral is transferred to the collateralReceiver if provided, otherwise it is burned.
-    /// - Emits a `RepaidPayment` event for each payment repaid.
+    /// - Emits a `PaymentsRepaid` event with the range of repaid payments.
     function _repay(
         uint256 start,
         uint256 end,
@@ -556,7 +552,7 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
     ///
     /// - Moves to REPOSSESSED state.
     /// - The collateral is transferred to the receiver.
-    /// - Emits a `RepossessedPayment` event for each payment repossessed.
+    /// - Emits a `PaymentsRepossessed` event with the range of repossessed payments.
     function _repossess(
         LoanState state_,
         uint256 start,
@@ -571,11 +567,10 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
 
         bytes32 cachePtr = _getFreePointer();
         for (uint256 i = start; i < end; i++) {
-            (uint256 tokenId, PaymentLib.Payment memory payment_) = payment(i);
-            principalRepossessed += payment_.principal;
-            emit RepossessedPayment(i, tokenId, payment_.principal);
+            principalRepossessed += payment(i).principal;
         }
         _setFreePointer(cachePtr);
+        emit PaymentsRepossessed(receiver, start, end);
 
         _debitCollateral(start, end, receiver, principalRepossessed);
     }
@@ -627,7 +622,7 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
     /// - The principal of the repaid payments is transferred from the sender to the receiver of each payment tranche
     /// - Moves to ONGOING if paid until below the default threshold.
     /// - Moves to PAID state if all payments are repaid.
-    /// - Emits a `RepaidPayment` event for each payment repaid.
+    /// - Emits a `PaymentsRepaid` event with the range of repaid payments.
     function _repayByTranches(
         uint256 start,
         uint256 end
@@ -664,29 +659,20 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
     ///
     /// - Moves to ONGOING if paid until below the default threshold.
     /// - Moves to PAID state if all payments are repaid.
-    /// - Emits a `RepaidPayment` event for each payment repaid.
+    /// - Emits a `PaymentsRepaid` event with the range of repaid payments.
     function _prepareToPay(
         uint256 start,
         uint256 end
     ) private returns (uint256 toPay, uint256 principalPaid) {
         bytes32 cachePtr = _getFreePointer();
         for (uint256 i = start; i < end; i++) {
-            (
-                uint256 collateralTokenId,
-                PaymentLib.Payment memory payment_
-            ) = payment(i);
+            PaymentLib.Payment memory payment_ = payment(i);
             uint48 timepoint = Time.timestamp();
             principalPaid += payment_.principal;
             toPay += payment_.principal + payment_.accruedInterest(timepoint);
-            emit RepaidPayment(
-                i,
-                collateralTokenId,
-                payment_.principal,
-                payment_.regularAccruedInterest(timepoint),
-                payment_.premiumAccruedInterest(timepoint)
-            );
         }
         _setFreePointer(cachePtr);
+        emit PaymentsRepaid(start, end);
     }
 
     /// @dev Disposes the collateral from payments. Burns the collateral if `collateralReceiver` is the zero address.
@@ -706,14 +692,13 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
     ) private {
         liquidityProvider().onDebit(discountedPrincipal);
         for (uint256 i = start; i < end; i++) {
-            (uint256 tokenId, ) = payment(i);
             if (collateralReceiver == address(0))
-                collateralAsset().burn(tokenId);
+                collateralAsset().burn(collateralId(i));
             else
                 collateralAsset().safeTransferFrom(
                     address(this),
                     collateralReceiver,
-                    tokenId
+                    collateralId(i)
                 );
 
             // No need to update heldTokenIds since they can't be transferred back anymore
