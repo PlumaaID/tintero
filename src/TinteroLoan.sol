@@ -536,8 +536,8 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
         address collateralReceiver
     ) internal {
         LoanStorage storage $ = getTinteroLoanStorage();
-        $.currentPaymentIndex = end.toUint24();
         uint256 principalPaid = _repayByTranches(start, end);
+        $.currentPaymentIndex = end.toUint24();
         _debitCollateral(start, end, collateralReceiver, principalPaid);
     }
 
