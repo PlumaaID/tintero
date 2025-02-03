@@ -10,6 +10,26 @@ import {ITinteroLoan} from "./ITinteroLoan.sol";
 /// The vault's assets are either lent to Loan contracts or delegated to other addresses
 /// to maximize the utilization of the assets.
 interface ITinteroVault is IERC4626 {
+    /// @dev Emitted when a Loan contract is created by this vault.
+    event LoanCreated(
+        address loan,
+        address collateralCollection,
+        address beneficiary,
+        uint24 defaultThreshold
+    );
+
+    /// @dev Emitted when assets are delegated to an address.
+    event DelegateAssets(address delegate, uint256 amount);
+
+    /// @dev Emitted when assets are refunded from an address.
+    event DelegateRefunded(address delegate, uint256 amount);
+
+    /// @dev Reverts if a Loan contract is already created by this vault.
+    error DuplicatedLoan();
+
+    /// @dev Reverts if the caller is not a Loan contract created by this vault.
+    error OnlyManagedLoan();
+
     /*********************/
     /*** Delegate View ***/
     /*********************/
@@ -44,7 +64,7 @@ interface ITinteroVault is IERC4626 {
     function refundDelegation(uint256 amount) external;
 
     // @dev Forces the vault to take back delegated assets from a delegate if they deposit them back.
-    function forceRefundDelegation() external;
+    function forceRefundDelegation(address delegate, uint256 amount) external;
 
     /*********************/
     /*** Loan External ***/

@@ -9,7 +9,8 @@ import {BaseTest} from "./Base.t.sol";
 import {PaymentLib} from "~/utils/PaymentLib.sol";
 import {TinteroLoan} from "~/TinteroLoan.factory.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import {TinteroVaultMock, TinteroVault} from "./mocks/TinteroVaultMock.sol";
+import {TinteroVaultMock} from "./mocks/TinteroVaultMock.sol";
+import {ITinteroVault} from "~/interfaces/ITinteroVault.sol";
 
 contract TinteroLoanVN is TinteroLoan {
     function initializeVN() public reinitializer(2) {}
@@ -71,6 +72,102 @@ contract TinteroVaultTest is BaseTest, ERC4626Test {
         assertEq(tintero.authority(), address(accessManager));
     }
 
+    function testDelegationFlow(
+        uint256 initialLiquidity,
+        uint256 amount,
+        address delegate
+    ) public {
+        vm.assume(delegate != address(0));
+        // See https://github.com/circlefin/stablecoin-evm/blob/master/contracts/v2/FiatTokenV2_2.sol#L215-L218
+        initialLiquidity = bound(initialLiquidity, 1, (1 << 255) - 1);
+        amount = bound(amount, 1, initialLiquidity);
+        _addLiquidity(initialLiquidity);
+
+        uint256 totalAssetsDelegatedBefore = tintero.totalAssetsDelegated();
+        uint256 delegatedToBefore = tintero.delegatedTo(delegate);
+
+        // Must revert if the caller is not an approved delegate
+        vm.prank(delegate);
+        vm.expectRevert();
+        tintero.askDelegation(amount);
+
+        // Delegate is approved
+        accessManager.grantRole(TINTERO_DELEGATE_ROLE, delegate, 0);
+
+        // Delegate asks for delegation
+        vm.prank(delegate);
+        tintero.askDelegation(amount);
+
+        // Delegated assets are updated
+        assertEq(
+            tintero.totalAssetsDelegated(),
+            totalAssetsDelegatedBefore + amount
+        );
+        assertEq(tintero.delegatedTo(delegate), delegatedToBefore + amount);
+
+        // Delegate returns delegation
+        vm.startPrank(delegate);
+        usdc.approve(address(tintero), amount);
+        tintero.refundDelegation(amount);
+        vm.stopPrank();
+
+        // Delegated assets are updated
+        assertEq(tintero.totalAssetsDelegated(), totalAssetsDelegatedBefore);
+        assertEq(tintero.delegatedTo(delegate), delegatedToBefore);
+    }
+
+    function testDelegationWithForcedRefund(
+        uint256 initialLiquidity,
+        uint256 amount,
+        address delegate
+    ) public {
+        vm.assume(delegate != address(0));
+        // See https://github.com/circlefin/stablecoin-evm/blob/master/contracts/v2/FiatTokenV2_2.sol#L215-L218
+        initialLiquidity = bound(initialLiquidity, 1, (1 << 255) - 1);
+        amount = bound(amount, 1, initialLiquidity);
+        _addLiquidity(initialLiquidity);
+
+        uint256 totalAssetsDelegatedBefore = tintero.totalAssetsDelegated();
+        uint256 delegatedToBefore = tintero.delegatedTo(delegate);
+
+        // Must revert if the caller is not an approved delegate
+        vm.prank(delegate);
+        vm.expectRevert();
+        tintero.askDelegation(amount);
+
+        // Delegate is approved
+        accessManager.grantRole(TINTERO_DELEGATE_ROLE, delegate, 0);
+
+        // Delegate asks for delegation
+        vm.prank(delegate);
+        tintero.askDelegation(amount);
+
+        // Delegated assets are updated
+        assertEq(
+            tintero.totalAssetsDelegated(),
+            totalAssetsDelegatedBefore + amount
+        );
+        assertEq(tintero.delegatedTo(delegate), delegatedToBefore + amount);
+
+        // Delegate deposits into the vault. It shouldn't happen with the list of
+        // accredited investors, but is possible if we want to lift restrictions
+        // in the future.
+        accessManager.grantRole(TINTERO_INVESTOR_ROLE, delegate, 0);
+        vm.startPrank(delegate);
+        usdc.approve(address(tintero), amount);
+        tintero.deposit(amount, delegate);
+        vm.stopPrank();
+
+        // Force refund
+        tintero.forceRefundDelegation(delegate, amount);
+
+        // Delegated assets are updated
+        assertEq(tintero.totalAssetsDelegated(), totalAssetsDelegatedBefore);
+        assertEq(tintero.delegatedTo(delegate), delegatedToBefore);
+        assertEq(usdc.balanceOf(delegate), 0);
+        assertEq(tintero.balanceOf(delegate), 0);
+    }
+
     function testRequestLoan(
         address borrower,
         address beneficiary,
@@ -93,7 +190,7 @@ contract TinteroVaultTest is BaseTest, ERC4626Test {
 
         // Fails creating the loan again
         vm.startPrank(borrower);
-        vm.expectRevert(TinteroVault.DuplicatedLoan.selector);
+        vm.expectRevert(ITinteroVault.DuplicatedLoan.selector);
         tintero.requestLoan(
             address(endorser),
             beneficiary,

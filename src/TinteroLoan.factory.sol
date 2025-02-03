@@ -7,16 +7,9 @@ import {AccessManaged} from "@openzeppelin/contracts/access/manager/AccessManage
 
 import {PaymentLib} from "./utils/PaymentLib.sol";
 import {TinteroLoan} from "./TinteroLoan.sol";
+import {ITinteroVault} from "./interfaces/ITinteroVault.sol";
 
 abstract contract TinteroLoanFactory is AccessManaged {
-    /// @dev Emitted when a Loan contract is created by this vault.
-    event LoanCreated(
-        address loan,
-        address collateralCollection,
-        address beneficiary,
-        uint24 defaultThreshold
-    );
-
     using Create2 for *;
 
     address public immutable INITIAL_ERC721_COLLATERAL_LOAN_IMPLEMENTATION =
@@ -64,7 +57,7 @@ abstract contract TinteroLoanFactory is AccessManaged {
 
         if (predicted.code.length == 0) {
             Create2.deploy(0, _salt(salt, msg.sender), bytecode);
-            emit LoanCreated(
+            emit ITinteroVault.LoanCreated(
                 predicted,
                 collateralCollection_,
                 beneficiary_,

@@ -3,7 +3,8 @@ pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
 import {Endorser} from "~/Endorser.sol";
-import {TinteroLoanFactory, TinteroLoan} from "~/TinteroLoan.factory.sol";
+import {ITinteroLoan} from "~/interfaces/ITinteroLoan.sol";
+import {ITinteroVault} from "~/interfaces/ITinteroVault.sol";
 import {PaymentLib} from "~/utils/PaymentLib.sol";
 import {AccessManager} from "@openzeppelin/contracts/access/manager/AccessManager.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
@@ -31,6 +32,8 @@ contract BaseTest is Test, USDCTest {
         uint64(bytes8(keccak256("PlumaaID.WITNESS_SETTER")));
     uint64 internal constant TINTERO_MANAGER_ROLE =
         uint64(bytes8(keccak256("PlumaaID.TINTERO_MANAGER")));
+    uint64 internal constant TINTERO_DELEGATE_ROLE =
+        uint64(bytes8(keccak256("PlumaaID.TINTERO_DELEGATE")));
     uint64 internal constant TINTERO_INVESTOR_ROLE =
         uint64(bytes8(keccak256("PlumaaID.TINTERO_INVESTOR")));
 
@@ -60,6 +63,7 @@ contract BaseTest is Test, USDCTest {
             address(accessManager)
         );
 
+        _setupDelegateRole(address(tintero));
         _setupManagerRole(address(tintero));
         _setupTinteroInvestorRole(address(tintero));
         _setupWitnessSetterRole(address(endorser));
@@ -69,6 +73,17 @@ contract BaseTest is Test, USDCTest {
     /***********************/
     /*** Roles Functions ***/
     /***********************/
+
+    function _setupDelegateRole(address target) internal {
+        bytes4[] memory selectors = new bytes4[](1);
+        selectors[0] = TinteroVault.askDelegation.selector;
+
+        accessManager.setTargetFunctionRole(
+            target,
+            selectors,
+            TINTERO_DELEGATE_ROLE
+        );
+    }
 
     function _setupManagerRole(address target) internal {
         bytes4[] memory selectors = new bytes4[](5);
@@ -152,7 +167,7 @@ contract BaseTest is Test, USDCTest {
 
         // Loan event must be emitted
         vm.expectEmit(address(tintero));
-        emit TinteroLoanFactory.LoanCreated(
+        emit ITinteroVault.LoanCreated(
             loan,
             address(endorser),
             beneficiary,
@@ -172,7 +187,7 @@ contract BaseTest is Test, USDCTest {
         vm.stopPrank();
 
         // Initial state
-        assertEq(uint8(TinteroLoan(loan).state()), uint8(LoanState.CREATED));
+        assertEq(uint8(ITinteroLoan(loan).state()), uint8(LoanState.CREATED));
 
         // Calculate total principal
         for (uint256 i = 0; i < payments.length; i++)
@@ -204,14 +219,14 @@ contract BaseTest is Test, USDCTest {
         // Must revert if the borrower is not a manager (role not assigned yet)
         vm.prank(manager);
         vm.expectRevert();
-        tintero.pushTranches(TinteroLoan(loan), paymentIndexes, recipients);
+        tintero.pushTranches(ITinteroLoan(loan), paymentIndexes, recipients);
 
         // Grant manager role
         accessManager.grantRole(TINTERO_MANAGER_ROLE, manager, 0);
 
         // Manager pushes tranches
         vm.prank(manager);
-        tintero.pushTranches(TinteroLoan(loan), paymentIndexes, recipients);
+        tintero.pushTranches(ITinteroLoan(loan), paymentIndexes, recipients);
     }
 
     function _addLiquidity(uint256 amount) internal {
@@ -223,7 +238,7 @@ contract BaseTest is Test, USDCTest {
 
     function _fund(address loan, address manager, uint256 nPayments) internal {
         vm.prank(manager);
-        tintero.fundN(TinteroLoan(loan), nPayments);
+        tintero.fundN(ITinteroLoan(loan), nPayments);
     }
 
     function _repossess(
@@ -239,7 +254,7 @@ contract BaseTest is Test, USDCTest {
 
         vm.prank(manager);
         tintero.repossess(
-            TinteroLoan(loan),
+            ITinteroLoan(loan),
             0,
             payments.length,
             repossessReceiver

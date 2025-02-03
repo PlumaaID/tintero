@@ -70,15 +70,9 @@ import {ITinteroVault} from "./interfaces/ITinteroVault.sol";
 /// @author Ernesto García
 ///
 /// @custom:security-contact security@plumaa.id
-contract TinteroVault is ITinteroVault, ERC4626, TinteroLoanFactory {
+contract TinteroVault is ITinteroVault, TinteroLoanFactory, ERC4626 {
     using SafeERC20 for IERC20Metadata;
     using EnumerableSet for EnumerableSet.AddressSet;
-
-    /// @dev Reverts if a Loan contract is already created by this vault.
-    error DuplicatedLoan();
-
-    /// @dev Reverts if the caller is not a Loan contract created by this vault.
-    error OnlyAuthorizedLoan();
 
     // Invariant: _totalAssetsLent == sum(_lentTo)
     uint256 private _totalAssetsDelegated;
@@ -89,7 +83,7 @@ contract TinteroVault is ITinteroVault, ERC4626, TinteroLoanFactory {
 
     /// @dev Reverts if the provided address is not a loan managed by this vault.
     modifier onlyLoan(address loan) {
-        if (!isLoan(loan)) revert OnlyAuthorizedLoan();
+        if (!isLoan(loan)) revert OnlyManagedLoan();
         _;
     }
 
@@ -209,25 +203,24 @@ contract TinteroVault is ITinteroVault, ERC4626, TinteroLoanFactory {
         _delegatedTo[msg.sender] += amount;
         _totalAssetsDelegated += amount;
         IERC20Metadata(asset()).safeTransfer(msg.sender, amount);
+        emit DelegateAssets(msg.sender, amount);
     }
 
     /// @dev Refunds delegated assets from an address.
     function refundDelegation(uint256 amount) external {
-        _delegatedTo[msg.sender] -= amount; // Will overflow if the delegate refunds more than delegated
-        _totalAssetsDelegated -= amount;
+        address delegate = msg.sender;
+        _refundDelegation(delegate, amount);
         IERC20Metadata(asset()).safeTransferFrom(
-            msg.sender,
+            delegate,
             address(this),
             amount
         );
     }
 
     /// @dev Forces the vault to take back delegated assets from a delegate if they deposit them back.
-    function forceRefundDelegation() external {
-        uint256 delegated = delegatedTo(msg.sender);
-        _delegatedTo[msg.sender] = 0;
-        _totalAssetsDelegated -= delegated;
-        _burn(msg.sender, convertToShares(delegated));
+    function forceRefundDelegation(address delegate, uint256 amount) external {
+        _refundDelegation(delegate, amount);
+        _burn(delegate, Math.min(convertToShares(amount), balanceOf(delegate)));
     }
 
     /*********************/
@@ -355,6 +348,13 @@ contract TinteroVault is ITinteroVault, ERC4626, TinteroLoanFactory {
     /**************************/
     /*** Internal Functions ***/
     /**************************/
+
+    /// @dev Refunds delegated assets from an address.
+    function _refundDelegation(address delegate, uint256 amount) internal {
+        _delegatedTo[delegate] -= amount; // Will overflow if the delegate refunds more than delegated
+        _totalAssetsDelegated -= amount;
+        emit DelegateRefunded(delegate, amount);
+    }
 
     /// @dev Pushes a list of payments to a Loan contract and increases its allowance accordingly.
     function _pushPayments(
