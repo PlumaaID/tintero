@@ -56,43 +56,25 @@ interface ITinteroLoan is ITinteroLoanEvents, ITinteroLoanErrors {
     /// @dev Get the index of the current tranche.
     function currentTrancheIndex() external view returns (uint256);
 
-    /// @dev Get the current tranche.
-    function currentTranche()
-        external
-        view
-        returns (uint96 paymentIndex, address recipient);
-
     /// @dev Total tranches in the loan.
     function totalTranches() external view returns (uint256);
 
     /// @dev Get payment details. A Payment is a struct with a principal and interest terms.
     function payment(
         uint256 index
-    )
-        external
-        view
-        returns (uint256 collateralTokenId, PaymentLib.Payment memory);
+    ) external view returns (PaymentLib.Payment memory);
+
+    /// @dev Get the collateral tokenId for a payment.
+    function collateralId(uint256 index) external view returns (uint256);
 
     /// @dev Get the index of the current payment yet to be repaid.
     function currentPaymentIndex() external view returns (uint256);
-
-    /// @dev Get the payment at which the loan is currently at and its collateral tokenId.
-    function currentPayment()
-        external
-        view
-        returns (uint256 collateralTokenId, PaymentLib.Payment memory);
 
     /// @dev Get the total number of payments.
     function totalPayments() external view returns (uint256);
 
     /// @dev Get the index of the current payment yet to be funded.
     function currentFundingIndex() external view returns (uint256);
-
-    /// dev Get the current payment yet to be funded.
-    function currentPaymentFunding()
-        external
-        view
-        returns (uint256 collateralTokenId, PaymentLib.Payment memory);
 
     /// @dev Address of the beneficiary of the loan.
     function beneficiary() external view returns (address);
@@ -123,7 +105,7 @@ interface ITinteroLoan is ITinteroLoanEvents, ITinteroLoanErrors {
     /// - The `collateralTokenIds` are transferred to this contract.
     /// - The `payment` function will return the added payments at their corresponding
     ///   indexes starting at `totalPayments`.
-    /// - Emits a `CreatedPayment` event for each payment added.
+    /// - Emits a `PaymentCreated` event for each payment added.
     function pushPayments(
         uint256[] calldata collateralTokenIds,
         PaymentLib.Payment[] calldata payments
@@ -145,7 +127,7 @@ interface ITinteroLoan is ITinteroLoanEvents, ITinteroLoanErrors {
     /// - The `tranche` function will return the added tranches at their corresponding
     ///   indexes starting at `totalTranches`.
     /// - The tranches are added to the loan.
-    /// - Emits a `CreatedTranche` event for each tranche added.
+    /// - Emits a `TrancheCreated` event for each tranche added.
     function pushTranches(
         uint96[] calldata paymentIndexes,
         address[] calldata recipients
@@ -167,7 +149,8 @@ interface ITinteroLoan is ITinteroLoanEvents, ITinteroLoanErrors {
     /// - Moves to ONGOING state if all payments are funded.
     /// - The `currentFundingIndex` is incremented by `n` or the remaining payments.
     /// - The principal of the funded payments is transferred from the liquidity provider to the beneficiary.
-    /// - Emits a `FundedPayment` event for each payment funded.
+    /// - Sets the `fundedAt` field of the funded payments to the current block timestamp.
+    /// - Emits a `PaymentsFunded` event with the range of funded payments.
     function fundN(uint256 n) external;
 
     /// @dev Withdraws the collateral to the beneficiary.
@@ -182,7 +165,7 @@ interface ITinteroLoan is ITinteroLoanEvents, ITinteroLoanErrors {
     ///
     /// - Moves to CANCELED state.
     /// - Each payment collateral is transferred to the beneficiary.
-    /// - Emits a `WithdrawnPayment` event for each payment withdrawn.
+    /// - Emits a `PaymentsWithdrawn` with the range of payments withdrawn
     function withdrawPaymentCollateral(uint256 start, uint256 end) external;
 
     /// @dev Same as `repayN(0, collateralReceiver)`.
@@ -204,7 +187,7 @@ interface ITinteroLoan is ITinteroLoanEvents, ITinteroLoanErrors {
     /// - The `currentPaymentIndex` is incremented by `n` or the remaining payments.
     /// - The principal of the repaid payments is transferred from the sender to the receiver of each payment tranche
     /// - The collateral is transferred to the collateralReceiver if provided, otherwise it is burned.
-    /// - Emits a `RepaidPayment` event for each payment repaid.
+    /// - Emits a `PaymentsRepaid` event with the range of repaid payments.
     function repayN(uint256 n, address collateralReceiver) external;
 
     /// @dev Repossess the collateral from payments.
@@ -220,6 +203,6 @@ interface ITinteroLoan is ITinteroLoanEvents, ITinteroLoanErrors {
     ///
     /// - Moves to REPOSSESSED state.
     /// - The collateral is transferred to the receiver.
-    /// - Emits a `RepossessedPayment` event for each payment repossessed.
+    /// - Emits a `PaymentsRepossessed` event with the range of repossessed payments.
     function repossess(uint256 start, uint256 end, address receiver) external;
 }
