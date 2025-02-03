@@ -5,6 +5,7 @@ import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
 import {BaseTest} from "./Base.t.sol";
 import {TinteroLoan} from "~/TinteroLoan.sol";
 import {PaymentLib} from "~/utils/PaymentLib.sol";
+import {LoanState} from "~/interfaces/ITinteroLoan.types.sol";
 
 contract TinteroLoanTest is BaseTest {
     using PaymentLib for PaymentLib.Payment;
@@ -123,6 +124,41 @@ contract TinteroLoanTest is BaseTest {
         tintero.requestLoan(
             address(endorser),
             address(0), // Zero beneficiary
+            defaultThreshold,
+            payments,
+            collateralTokenIds,
+            bytes32(0)
+        );
+    }
+
+    function testRevertFundedAtNotZero(
+        address borrower,
+        address beneficiary,
+        uint24 nPayments,
+        uint24 defaultThreshold,
+        uint48 fundedAt
+    ) public {
+        _sanitizeActors(borrower, beneficiary);
+        nPayments = uint24(bound(nPayments, 0, ARBITRARY_MAX_PAYMENTS));
+        vm.assume(defaultThreshold != 0);
+        vm.assume(fundedAt != 0);
+
+        PaymentLib.Payment[] memory payments = _mockPayments(0, nPayments);
+        uint256[] memory collateralTokenIds = _mockCollateralIds(
+            0,
+            nPayments,
+            borrower
+        );
+
+        // Set fundedAt to not zero
+        for (uint256 i = 0; i < payments.length; i++) {
+            payments[i].fundedAt = fundedAt;
+        }
+
+        if (payments.length != 0) vm.expectRevert();
+        tintero.requestLoan(
+            address(endorser),
+            beneficiary,
             defaultThreshold,
             payments,
             collateralTokenIds,
@@ -646,7 +682,66 @@ contract TinteroLoanTest is BaseTest {
         assertEq(TinteroLoan(loan).currentFundingIndex(), nPayments);
     }
 
-    function testFundNUntranchedPayments(
+    function testPartialFundN(
+        address borrower,
+        address beneficiary,
+        address manager,
+        uint24 nPayments,
+        uint24 nTranches
+    ) public {
+        _sanitizeAccessManagerCaller(manager);
+        _sanitizeActors(borrower, beneficiary);
+        (nPayments, nTranches) = _sanitizeTranches(nPayments, nTranches);
+        vm.assume(nPayments > 1); // At least two payments
+
+        (
+            address loan,
+            uint256 totalPrincipal,
+            PaymentLib.Payment[] memory payments,
+            uint256[] memory collateralTokenIds
+        ) = _requestLoan(
+                borrower,
+                beneficiary,
+                bytes32(0),
+                nPayments,
+                nPayments
+            );
+
+        totalPrincipal = totalPrincipal - payments[nPayments - 1].principal;
+
+        uint256 collateralTokenId = TinteroLoan(loan).collateralId(
+            TinteroLoan(loan).currentFundingIndex()
+        );
+        PaymentLib.Payment memory firstPayment = TinteroLoan(loan).payment(
+            TinteroLoan(loan).currentFundingIndex()
+        );
+        assertEq(firstPayment.principal, payments[0].principal); // First payment
+        assertEq(collateralTokenId, collateralTokenIds[0]);
+
+        _pushTranches(manager, loan, nTranches, address(this), nPayments);
+        _addLiquidity(totalPrincipal);
+
+        IERC20 asset_ = IERC20(TinteroLoan(loan).lendingAsset());
+
+        uint256 tinteroAssetBalanceBefore = asset_.balanceOf(address(tintero));
+        uint256 beneficiaryAssetBalanceBefore = asset_.balanceOf(beneficiary);
+
+        // Fund partial amount
+        _fund(loan, manager, nPayments - 1);
+
+        // Actual assets are transferred to the beneficiary
+        assertEq(
+            asset_.balanceOf(beneficiary),
+            beneficiaryAssetBalanceBefore + totalPrincipal
+        );
+        assertEq(
+            asset_.balanceOf(address(tintero)),
+            tinteroAssetBalanceBefore - totalPrincipal
+        );
+        assertEq(uint8(TinteroLoan(loan).state()), uint8(LoanState.FUNDING));
+    }
+
+    function testFundNRevertUntranchedPayments(
         address borrower,
         address beneficiary,
         address manager,
@@ -725,7 +820,7 @@ contract TinteroLoanTest is BaseTest {
         }
     }
 
-    function testWithdrawPaymentCollateralNotBeneficiary(
+    function testWithdrawPaymentCollateralRevertNotBeneficiary(
         address borrower,
         address beneficiary,
         uint24 nPayments,
@@ -958,7 +1053,7 @@ contract TinteroLoanTest is BaseTest {
         }
     }
 
-    function testRepossessNotLiquidityProvider(
+    function testRepossessRevertNotLiquidityProvider(
         address borrower,
         address beneficiary,
         uint24 nPayments,
