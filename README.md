@@ -49,6 +49,7 @@ make
 - PROVENANCE_AUTHORIZER: 12236269664351332516 (`uint64(bytes8(keccak256("PlumaaID.PROVENANCE_AUTHORIZER")))`)
 - WITNESS_SETTER: 5639234726794575539 (`uint64(bytes8(keccak256("PlumaaID.WITNESS_SETTER")))`)
 - TINTERO_MANAGER: 7051192966853550817 (`uint64(bytes8(keccak256("PlumaaID.TINTERO_MANAGER")))`)
+- TINTERO_DELEGATE: 17120158849100820983 (`uint64(bytes8(keccak256("PlumaaID.TINTERO_DELEGATE")))`)
 - TINTERO_INVESTOR: 5986081590623214882 (`uint64(bytes8(keccak256("PlumaaID.TINTERO_INVESTOR")))`)
 
 ### Role mapping
@@ -62,6 +63,7 @@ make
 | TINTERO_MANAGER  | `fundN(address,uint256)`                                                         | ae527b8a | TBD                                        |
 | TINTERO_MANAGER  | `repossess(address,uint256,uint256,address)`                                     | d3b500cf | TBD                                        |
 | TINTERO_MANAGER  | `upgradeLoan(address,uint256,uint256,address)`                                   | c3aacfe3 | TBD                                        |
+| TINTERO_DELEGATE | `askDelegation(uint256)`                                                         | 30adbaff | TBD                                        |
 | TINTERO_INVESTOR | `deposit(uint256,address)`                                                       | 6e553f65 | TBD                                        |
 | TINTERO_INVESTOR | `mint(uint256,address)`                                                          | 94bf804d | TBD                                        |
 
@@ -73,4 +75,5 @@ make
 | UPGRADER              | 0x00fA8957dC3D2f6081360056bf2f6d4b5f1a49aa | 259200 (3 days) |
 | WITNESS_SETTER        | 0x00fA8957dC3D2f6081360056bf2f6d4b5f1a49aa | 0               |
 | TINTERO_MANAGER       | TBD                                        | 0               |
+| TINTERO_DELEGATE      | TBD                                        | 32200 (12 hrs)  |
 | TINTERO_INVESTOR      | TBD                                        | 0               |

@@ -6,25 +6,26 @@ import {IERC20Metadata} from "@openzeppelin/contracts/interfaces/IERC20Metadata.
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-import {ERC4626, ERC20} from "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol";
+import {IERC4626, ERC4626, ERC20} from "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol";
 import {AccessManaged} from "@openzeppelin/contracts/access/manager/AccessManaged.sol";
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 
 import {PaymentLib} from "./utils/PaymentLib.sol";
-import {TinteroLoan} from "./TinteroLoan.sol";
 import {TinteroLoanFactory} from "./TinteroLoan.factory.sol";
-import {IPaymentCallback} from "./interfaces/IPaymentCallback.sol";
+import {ITinteroLoan} from "./interfaces/ITinteroLoan.sol";
+import {ITinteroVault} from "./interfaces/ITinteroVault.sol";
 
 /// @title Tintero Vault
 ///
 /// @notice An [ERC4626](https://docs.openzeppelin.com/contracts/5.x/erc4626) vault that receives
 /// an ERC20 token in exchange for shares and allocates these assets towards funding Loan contracts
-/// collateralized by tokenized ERC721 obligations.
+/// collateralized by tokenized ERC721 obligations. Idle capital is delegated to other addresses to
+/// maximize the yield of the vault's assets.
 ///
 /// The contract keeps track of the total assets in management by suming the total assets lent to
 /// Loan contracts and the total assets held by the vault, allowing owners to withdraw their assets
 /// at any time unless the vault does not have enough assets to cover the withdrawal (i.e. everything is
-/// lent out).
+/// lent out or delegated).
 ///
 /// == Concepts
 ///
@@ -51,11 +52,14 @@ import {IPaymentCallback} from "./interfaces/IPaymentCallback.sol";
 /// The vault is managed by an access manager instance that controls the permissions of critical
 /// vault's functions. These functions include:
 ///
-/// - `pushPayments`: Adds a list of payments to a Loan contract.
+/// - `askDelegation`: Takes assets from the vault to use them in other protocols to maximize the
+///   yield of the vault's assets.
 /// - `pushTranches`: Adds a list of tranches to a Loan contract.
 /// - `fundN`: Funds `n` payments from a Loan contract.
 /// - `repossess`: Repossess a range of payments from a Loan contract and cancels it. The Vault will
 ///   receive the ERC721 tokens and will cancel the tracked assets lent (absorbing the loss).
+/// - `upgradeLoan`: Upgrades a Loan contract to a new implementation. Allows renegotiating the terms
+///   of the Loan contract.
 ///
 /// == KYC and Accredited Investors
 ///
@@ -66,24 +70,20 @@ import {IPaymentCallback} from "./interfaces/IPaymentCallback.sol";
 /// @author Ernesto García
 ///
 /// @custom:security-contact security@plumaa.id
-contract TinteroVault is ERC4626, TinteroLoanFactory, IPaymentCallback {
+contract TinteroVault is ITinteroVault, TinteroLoanFactory, ERC4626 {
     using SafeERC20 for IERC20Metadata;
     using EnumerableSet for EnumerableSet.AddressSet;
 
-    /// @dev Reverts if a Loan contract is already created by this vault.
-    error DuplicatedLoan();
-
-    /// @dev Reverts if the caller is not a Loan contract created by this vault.
-    error OnlyAuthorizedLoan();
-
     // Invariant: _totalAssetsLent == sum(_lentTo)
+    uint256 private _totalAssetsDelegated;
+    mapping(address delegate => uint256 assets) private _delegatedTo;
     uint256 private _totalAssetsLent;
     mapping(address loan => uint256 assets) private _lentTo;
     EnumerableSet.AddressSet private _loans;
 
     /// @dev Reverts if the provided address is not a loan managed by this vault.
     modifier onlyLoan(address loan) {
-        if (!isLoan(loan)) revert OnlyAuthorizedLoan();
+        if (!isLoan(loan)) revert OnlyManagedLoan();
         _;
     }
 
@@ -100,14 +100,23 @@ contract TinteroVault is ERC4626, TinteroLoanFactory, IPaymentCallback {
         AccessManaged(authority_)
     {}
 
-    /**********************/
-    /*** View Functions ***/
-    /**********************/
+    /*********************/
+    /*** Delegate View ***/
+    /*********************/
 
-    /// @inheritdoc ERC4626
-    function totalAssets() public view override returns (uint256) {
-        return super.totalAssets() + _totalAssetsLent;
+    /// @dev The total amount of idle assets delegated.
+    function totalAssetsDelegated() public view returns (uint256) {
+        return _totalAssetsDelegated;
     }
+
+    /// @dev The total amount of assets delegated to an address.
+    function delegatedTo(address delegate) public view returns (uint256) {
+        return _delegatedTo[delegate];
+    }
+
+    /*****************/
+    /*** Loan View ***/
+    /*****************/
 
     /// @dev The total amount of assets lent to Loan contracts.
     function totalAssetsLent() public view returns (uint256) {
@@ -115,17 +124,34 @@ contract TinteroVault is ERC4626, TinteroLoanFactory, IPaymentCallback {
     }
 
     /// @dev The total amount of assets lent to a Loan contract.
-    function lentTo(address _loan) public view returns (uint256) {
-        return _lentTo[_loan];
+    function lentTo(address loan) public view returns (uint256) {
+        return _lentTo[loan];
     }
 
+    /// @dev Whether a Loan contract is managed by this vault.
     function isLoan(address loan) public view returns (bool) {
         return _loans.contains(loan);
     }
 
+    /********************/
+    /*** ERC4626 View ***/
+    /********************/
+
+    /// @inheritdoc ERC4626
+    function totalAssets()
+        public
+        view
+        override(ERC4626, IERC4626)
+        returns (uint256)
+    {
+        return super.totalAssets() + _totalAssetsLent + _totalAssetsDelegated;
+    }
+
     /// @dev The maximum amount of assets that can be withdrawn.
     /// This is the minimum between the owner's max withdrawable assets and the vault's asset balance.
-    function maxWithdraw(address owner) public view override returns (uint256) {
+    function maxWithdraw(
+        address owner
+    ) public view override(ERC4626, IERC4626) returns (uint256) {
         IERC20Metadata asset_ = IERC20Metadata(asset());
 
         return
@@ -137,7 +163,9 @@ contract TinteroVault is ERC4626, TinteroLoanFactory, IPaymentCallback {
 
     /// @dev The maximum amount of shares that can be redeemed.
     /// This is the minimum between the owner's max redeemable shares and the vault's asset balance.
-    function maxRedeem(address owner) public view override returns (uint256) {
+    function maxRedeem(
+        address owner
+    ) public view override(ERC4626, IERC4626) returns (uint256) {
         IERC20Metadata asset_ = IERC20Metadata(asset());
         return
             Math.min(
@@ -146,15 +174,15 @@ contract TinteroVault is ERC4626, TinteroLoanFactory, IPaymentCallback {
             );
     }
 
-    /**************************/
-    /*** Investor Functions ***/
-    /**************************/
+    /*************************/
+    /*** Investor External ***/
+    /*************************/
 
     /// @dev Deposit assets. Restricted to accredited investors.
     function deposit(
         uint256 assets,
         address receiver
-    ) public override restricted returns (uint256) {
+    ) public override(ERC4626, IERC4626) restricted returns (uint256) {
         return super.deposit(assets, receiver);
     }
 
@@ -162,13 +190,82 @@ contract TinteroVault is ERC4626, TinteroLoanFactory, IPaymentCallback {
     function mint(
         uint256 shares,
         address receiver
-    ) public override restricted returns (uint256) {
+    ) public override(ERC4626, IERC4626) restricted returns (uint256) {
         return super.mint(shares, receiver);
     }
 
-    /**********************/
-    /*** Loan Functions ***/
-    /**********************/
+    /*************************/
+    /*** Delegate External ***/
+    /*************************/
+
+    /// @dev Delegates assets to an address.
+    function askDelegation(uint256 amount) external restricted {
+        _delegatedTo[msg.sender] += amount;
+        _totalAssetsDelegated += amount;
+        IERC20Metadata(asset()).safeTransfer(msg.sender, amount);
+        emit DelegateAssets(msg.sender, amount);
+    }
+
+    /// @dev Refunds delegated assets from an address.
+    function refundDelegation(uint256 amount) external {
+        address delegate = msg.sender;
+        _refundDelegation(delegate, amount);
+        IERC20Metadata(asset()).safeTransferFrom(
+            delegate,
+            address(this),
+            amount
+        );
+    }
+
+    /// @dev Forces the vault to take back delegated assets from a delegate if they deposit them back.
+    function forceRefundDelegation(address delegate, uint256 amount) external {
+        _refundDelegation(delegate, amount);
+        _burn(delegate, Math.min(convertToShares(amount), balanceOf(delegate)));
+    }
+
+    /*********************/
+    /*** Loan External ***/
+    /*********************/
+
+    /// @dev Creates a new instance of a Loan contract with the provided parameters.
+    ///
+    /// Requirements:
+    ///
+    /// - The loan MUST NOT have been created.
+    /// - Those of SafeERC20.safeIncreaseAllowance.
+    /// - Those of Loan#pushPayments.
+    function requestLoan(
+        address collateralCollection,
+        address beneficiary,
+        uint24 defaultThreshold,
+        PaymentLib.Payment[] calldata payments,
+        uint256[] calldata collateralTokenIds,
+        bytes32 salt
+    ) external {
+        address predicted = _deployLoan(
+            collateralCollection,
+            beneficiary,
+            defaultThreshold,
+            salt
+        );
+        if (!_loans.add(predicted)) revert DuplicatedLoan();
+        _pushPayments(ITinteroLoan(predicted), collateralTokenIds, payments);
+    }
+
+    /// @dev Adds a list of payments to a Loan contract. Calls Loan#pushPayments.
+    ///
+    /// Requirements:
+    ///
+    /// - The loan MUST be created by this vault.
+    /// - Those of SafeERC20.safeIncreaseAllowance.
+    /// - Those of Loan#pushPayments.
+    function pushPayments(
+        ITinteroLoan loan,
+        uint256[] calldata collateralTokenIds,
+        PaymentLib.Payment[] calldata payments
+    ) external onlyLoan(address(loan)) {
+        _pushPayments(loan, collateralTokenIds, payments);
+    }
 
     /// @dev Debits an outstanding principal from a Loan contract.
     /// Must be called by the Loan contract when a payment is either:
@@ -180,47 +277,9 @@ contract TinteroVault is ERC4626, TinteroLoanFactory, IPaymentCallback {
         _totalAssetsLent -= principal;
     }
 
-    /**************************/
-    /*** External Functions ***/
-    /**************************/
-
-    /// @dev Creates a new instance of a Loan contract with the provided parameters.
-    function requestLoan(
-        address collateralCollection_,
-        address beneficiary_,
-        uint24 defaultThreshold_,
-        PaymentLib.Payment[] calldata payments_,
-        uint256[] calldata collateralTokenIds_,
-        bytes32 salt
-    ) external {
-        address predicted = _deployLoan(
-            collateralCollection_,
-            beneficiary_,
-            defaultThreshold_,
-            salt
-        );
-        if (!_loans.add(predicted)) revert DuplicatedLoan();
-        _pushPayments(TinteroLoan(predicted), collateralTokenIds_, payments_);
-    }
-
-    /*************************/
-    /*** Manager Functions ***/
-    /*************************/
-
-    /// @dev Adds a list of payments to a Loan contract. Calls Loan#pushPayments.
-    ///
-    /// Requirements:
-    ///
-    /// - The loan MUST be created by this vault.
-    /// - Those of SafeERC20.safeIncreaseAllowance.
-    /// - Those of Loan#pushPayments.
-    function pushPayments(
-        TinteroLoan loan,
-        uint256[] calldata collateralTokenIds,
-        PaymentLib.Payment[] calldata payments_
-    ) external restricted onlyLoan(address(loan)) {
-        _pushPayments(loan, collateralTokenIds, payments_);
-    }
+    /******************/
+    /*** Management ***/
+    /******************/
 
     /// @dev Adds a list of tranches to a Loan contract. Calls Loan#pushTranches.
     ///
@@ -229,7 +288,7 @@ contract TinteroVault is ERC4626, TinteroLoanFactory, IPaymentCallback {
     /// - The loan MUST be created by this vault.
     /// - Those of Loan#pushTranches.
     function pushTranches(
-        TinteroLoan loan,
+        ITinteroLoan loan,
         uint96[] calldata paymentIndexes,
         address[] calldata recipients
     ) external restricted onlyLoan(address(loan)) {
@@ -241,15 +300,17 @@ contract TinteroVault is ERC4626, TinteroLoanFactory, IPaymentCallback {
     /// Requirements:
     ///
     /// - The loan MUST be created by this vault.
+    ///
+    /// NOTE: The manager MUST ensure that tranches are paid back to the vault in
+    /// a way that covers at least the principal lent. Otherwise, the vault will
+    /// loose value even if the Loan contract is paid back.
     function fundN(
-        TinteroLoan loan,
+        ITinteroLoan loan,
         uint256 n
     ) external restricted onlyLoan(address(loan)) {
-        IERC20Metadata asset_ = IERC20Metadata(asset());
-        uint256 assetsBalance = asset_.balanceOf(address(this));
-        loan.fundN(n);
-        uint256 newAssetsBalance = asset_.balanceOf(address(this));
-        uint256 totalPrincipalFunded = assetsBalance - newAssetsBalance;
+        // Reentrancy would be possible if `fundN` allows for it.
+        // However, `fundN` interacts with the asset contract, which has no callback mechanism.
+        uint256 totalPrincipalFunded = loan.fundN(n);
         _lentTo[address(loan)] += totalPrincipalFunded;
         _totalAssetsLent += totalPrincipalFunded;
     }
@@ -262,7 +323,7 @@ contract TinteroVault is ERC4626, TinteroLoanFactory, IPaymentCallback {
     /// - The receiver must implement IERC721Receiver to receive the collateral (if contract).
     /// - Those of Loan#repossess.
     function repossess(
-        TinteroLoan loan,
+        ITinteroLoan loan,
         uint256 start,
         uint256 end,
         address receiver
@@ -270,33 +331,46 @@ contract TinteroVault is ERC4626, TinteroLoanFactory, IPaymentCallback {
         loan.repossess(start, end, receiver);
     }
 
-    /// @dev Upgrades a Loan contract to a new implementation. Calls Loan#upgradeToAndCall.
+    /// @dev Upgrades a Loan contract to a new implementation. Calls Loan#upgradeLoan.
     ///
     /// Requirements:
     ///
     /// - The loan MUST be created by this vault.
-    /// - Those of Loan#upgradeToAndCall.
+    /// - Those of Loan#upgradeLoan.
     function upgradeLoan(
-        TinteroLoan loan,
+        ITinteroLoan loan,
         address newImplementation,
         bytes calldata data
     ) external restricted onlyLoan(address(loan)) {
-        loan.upgradeToAndCall(newImplementation, data);
+        loan.upgradeLoan(newImplementation, data);
     }
 
     /**************************/
     /*** Internal Functions ***/
     /**************************/
 
+    /// @dev Refunds delegated assets from an address.
+    function _refundDelegation(address delegate, uint256 amount) internal {
+        _delegatedTo[delegate] -= amount; // Will overflow if the delegate refunds more than delegated
+        _totalAssetsDelegated -= amount;
+        emit DelegateRefunded(delegate, amount);
+    }
+
     /// @dev Pushes a list of payments to a Loan contract and increases its allowance accordingly.
     function _pushPayments(
-        TinteroLoan loan,
+        ITinteroLoan loan,
         uint256[] calldata collateralTokenIds,
-        PaymentLib.Payment[] calldata payment_
+        PaymentLib.Payment[] calldata payments
     ) internal {
+        // State is consistent at this point.
+        // Although reentrancy is not possible, it's not an issue.
+        uint256 principalRequested = loan.pushPayments(
+            collateralTokenIds,
+            payments
+        );
         IERC20Metadata(asset()).safeIncreaseAllowance(
             address(loan),
-            loan.pushPayments(collateralTokenIds, payment_)
+            principalRequested
         );
     }
 
