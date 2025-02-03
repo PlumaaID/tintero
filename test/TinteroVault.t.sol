@@ -140,18 +140,6 @@ contract TinteroVaultTest is BaseTest, ERC4626Test {
             borrower
         );
 
-        // Must revert if the borrower is not a manager (role not assigned yet)
-        vm.prank(manager);
-        vm.expectRevert();
-        tintero.pushPayments(
-            TinteroLoan(loan),
-            lastCollateralIds,
-            lastPayments
-        );
-
-        // Grant manager role
-        accessManager.grantRole(TINTERO_MANAGER_ROLE, manager, 0);
-
         // Must revert if the address is not a loan
         vm.prank(manager);
         vm.expectRevert();

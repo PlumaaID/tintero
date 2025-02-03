@@ -10,7 +10,7 @@ import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import {PaymentLib} from "./utils/PaymentLib.sol";
 import {TinteroLoanStorage} from "./TinteroLoan.storage.sol";
 import {LoanState} from "./interfaces/ITinteroLoan.types.sol";
-import {IPaymentCallback} from "./interfaces/IPaymentCallback.sol";
+import {ITinteroVault} from "./interfaces/ITinteroVault.sol";
 
 abstract contract TinteroLoanView is TinteroLoanStorage {
     using PaymentLib for PaymentLib.Payment;
@@ -28,8 +28,8 @@ abstract contract TinteroLoanView is TinteroLoanStorage {
     }
 
     /// @dev Address of the liquidity provider funding the loan.
-    function liquidityProvider() public view returns (IPaymentCallback) {
-        return IPaymentCallback(getTinteroLoanStorage().liquidityProvider);
+    function liquidityProvider() public view returns (ITinteroVault) {
+        return ITinteroVault(getTinteroLoanStorage().liquidityProvider);
     }
 
     /// @dev Get the index at which the tranche starts and its recipient.

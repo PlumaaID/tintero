@@ -178,8 +178,8 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
     /// - The principal of the funded payments is transferred from the liquidity provider to the beneficiary.
     /// - Sets the `fundedAt` field of the funded payments to the current block timestamp.
     /// - Emits a `PaymentsFunded` event with the range of funded payments.
-    function fundN(uint256 n) external {
-        if (n == 0) return; // No-op
+    function fundN(uint256 n) external returns (uint256 totalPrincipal) {
+        if (n == 0) return 0; // No-op
 
         // Checks
         (uint256 lastPaymentIndex, ) = tranche(totalTranches() - 1); // Will overflow if totalTranches() == 0
@@ -190,7 +190,7 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
         );
 
         // Effects
-        uint256 totalPrincipal = _fundN(n);
+        totalPrincipal = _fundN(n);
 
         // Interactions
         // We tie funding to `msg.sender`, otherwise it enables arbitrary account draining if they approved the contract.
@@ -199,6 +199,8 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
             beneficiary(),
             totalPrincipal
         );
+
+        return totalPrincipal;
     }
 
     /// @dev Withdraws the collateral to the beneficiary.
@@ -534,8 +536,8 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
         address collateralReceiver
     ) internal {
         LoanStorage storage $ = getTinteroLoanStorage();
-        uint256 principalPaid = _repayByTranches(start, end);
         $.currentPaymentIndex = end.toUint24();
+        uint256 principalPaid = _repayByTranches(start, end);
         _debitCollateral(start, end, collateralReceiver, principalPaid);
     }
 
@@ -569,6 +571,14 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
         emit PaymentsRepossessed(receiver, start, end);
 
         _debitCollateral(start, end, receiver, principalRepossessed);
+    }
+
+    /// @dev Upgrades the loan to a new implementation. Useful for renegotiating terms.
+    function upgradeLoan(
+        address newImplementation,
+        bytes calldata data
+    ) external {
+        upgradeToAndCall(newImplementation, data);
     }
 
     function _authorizeUpgrade(

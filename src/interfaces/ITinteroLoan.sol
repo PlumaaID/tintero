@@ -8,7 +8,7 @@ import {PaymentLib} from "../utils/PaymentLib.sol";
 import {ITinteroLoanEvents} from "./ITinteroLoan.events.sol";
 import {ITinteroLoanErrors} from "./ITinteroLoan.errors.sol";
 import {LoanState} from "./ITinteroLoan.types.sol";
-import {IPaymentCallback} from "./IPaymentCallback.sol";
+import {ITinteroVault} from "./ITinteroVault.sol";
 
 /// @title ERC721 Collateral Loan Interface
 ///
@@ -45,7 +45,7 @@ interface ITinteroLoan is ITinteroLoanEvents, ITinteroLoanErrors {
     function collateralAsset() external view returns (ERC721Burnable);
 
     /// @dev Address of the liquidity provider funding the loan.
-    function liquidityProvider() external view returns (IPaymentCallback);
+    function liquidityProvider() external view returns (ITinteroVault);
 
     /// @dev Get the index at which the tranche starts and its recipient.
     /// A tranche is a collection of payments from [paymentIndex ?? 0, nextPaymentIndex)
@@ -151,7 +151,7 @@ interface ITinteroLoan is ITinteroLoanEvents, ITinteroLoanErrors {
     /// - The principal of the funded payments is transferred from the liquidity provider to the beneficiary.
     /// - Sets the `fundedAt` field of the funded payments to the current block timestamp.
     /// - Emits a `PaymentsFunded` event with the range of funded payments.
-    function fundN(uint256 n) external;
+    function fundN(uint256 n) external returns (uint256 principalFunded);
 
     /// @dev Withdraws the collateral to the beneficiary.
     ///
@@ -205,4 +205,10 @@ interface ITinteroLoan is ITinteroLoanEvents, ITinteroLoanErrors {
     /// - The collateral is transferred to the receiver.
     /// - Emits a `PaymentsRepossessed` event with the range of repossessed payments.
     function repossess(uint256 start, uint256 end, address receiver) external;
+
+    /// @dev Upgrades the loan to a new implementation. Useful for renegotiating terms.
+    function upgradeLoan(
+        address newImplementation,
+        bytes calldata data
+    ) external;
 }
