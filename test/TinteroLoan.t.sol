@@ -204,7 +204,7 @@ contract TinteroLoanTest is BaseTest {
         );
 
         // Grant manager role
-        accessManager.grantRole(TINTERO_MANAGER_ROLE, manager, 0);
+        accessManager.grantRole(TINTERO_MANAGER_USDC_V01_ROLE, manager, 0);
 
         // Manager pushes extra payments
         vm.prank(manager);
@@ -312,7 +312,7 @@ contract TinteroLoanTest is BaseTest {
         );
 
         // Mismatched payment and collateral ids
-        accessManager.grantRole(TINTERO_MANAGER_ROLE, manager, 0);
+        accessManager.grantRole(TINTERO_MANAGER_USDC_V01_ROLE, manager, 0);
         vm.prank(manager);
         vm.expectRevert();
         tintero.pushPayments(
@@ -349,7 +349,7 @@ contract TinteroLoanTest is BaseTest {
 
         lastPayments[0].maturityPeriod = 0; // Matured
 
-        accessManager.grantRole(TINTERO_MANAGER_ROLE, manager, 0);
+        accessManager.grantRole(TINTERO_MANAGER_USDC_V01_ROLE, manager, 0);
         vm.prank(manager);
         vm.expectRevert();
         tintero.pushPayments(
@@ -387,7 +387,7 @@ contract TinteroLoanTest is BaseTest {
         // Duplicated collateral token id
         lastCollateralIds[0] = lastCollateralIds[1];
 
-        accessManager.grantRole(TINTERO_MANAGER_ROLE, manager, 0);
+        accessManager.grantRole(TINTERO_MANAGER_USDC_V01_ROLE, manager, 0);
         vm.prank(manager);
         vm.expectRevert();
         tintero.pushPayments(
@@ -516,7 +516,7 @@ contract TinteroLoanTest is BaseTest {
             recipients[i] = address(this);
         }
 
-        accessManager.grantRole(TINTERO_MANAGER_ROLE, manager, 0);
+        accessManager.grantRole(TINTERO_MANAGER_USDC_V01_ROLE, manager, 0);
         vm.prank(manager);
         vm.expectRevert();
         tintero.pushTranches(TinteroLoan(loan), paymentIndexes, recipients);
@@ -580,7 +580,7 @@ contract TinteroLoanTest is BaseTest {
         paymentIndexes[last] = paymentIndexes[last - 1]; // Unincreasing
 
         // Grant manager role
-        accessManager.grantRole(TINTERO_MANAGER_ROLE, manager, 0);
+        accessManager.grantRole(TINTERO_MANAGER_USDC_V01_ROLE, manager, 0);
 
         // Manager pushes tranches
         vm.prank(manager);
@@ -618,7 +618,7 @@ contract TinteroLoanTest is BaseTest {
         }
 
         // Grant manager role
-        accessManager.grantRole(TINTERO_MANAGER_ROLE, manager, 0);
+        accessManager.grantRole(TINTERO_MANAGER_USDC_V01_ROLE, manager, 0);
 
         // Manager pushes tranches
         vm.prank(manager);
@@ -778,7 +778,7 @@ contract TinteroLoanTest is BaseTest {
         );
 
         // Grant manager role
-        accessManager.grantRole(TINTERO_MANAGER_ROLE, manager, 0);
+        accessManager.grantRole(TINTERO_MANAGER_USDC_V01_ROLE, manager, 0);
 
         // Manager pushes extra payments
         vm.prank(manager);

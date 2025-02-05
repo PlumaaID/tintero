@@ -5,6 +5,7 @@ import {IERC20Metadata} from "@openzeppelin/contracts/interfaces/IERC20Metadata.
 import {IERC1967} from "@openzeppelin/contracts/interfaces/IERC1967.sol";
 import {ERC4626Test} from "erc4626-tests/ERC4626.test.sol";
 import {BaseTest} from "./Base.t.sol";
+import {ERC20Mock} from "./mocks/ERC20Mock.sol";
 
 import {PaymentLib} from "~/utils/PaymentLib.sol";
 import {TinteroLoan} from "~/TinteroLoan.factory.sol";
@@ -17,18 +18,6 @@ contract TinteroLoanVN is TinteroLoan {
 
     function version() public pure returns (string memory) {
         return "N";
-    }
-}
-
-contract ERC20Mock is ERC20 {
-    constructor() ERC20("ERC20Mock", "E20M") {}
-
-    function mint(address account, uint256 amount) external {
-        _mint(account, amount);
-    }
-
-    function burn(address account, uint256 amount) external {
-        _burn(account, amount);
     }
 }
 
@@ -53,7 +42,7 @@ contract TinteroVaultTest is BaseTest, ERC4626Test {
     function setUpVault(Init memory init) public override {
         _setupTinteroInvestorRole(_vault_);
         for (uint256 i = 0; i < init.user.length; i++) {
-            accessManager.grantRole(TINTERO_INVESTOR_ROLE, init.user[i], 0);
+            accessManager.grantRole(TINTERO_INVESTOR_USDC_V01_ROLE, init.user[i], 0);
         }
         super.setUpVault(init);
     }
@@ -92,7 +81,7 @@ contract TinteroVaultTest is BaseTest, ERC4626Test {
         tintero.askDelegation(amount);
 
         // Delegate is approved
-        accessManager.grantRole(TINTERO_DELEGATE_ROLE, delegate, 0);
+        accessManager.grantRole(TINTERO_DELEGATE_USDC_V01_ROLE, delegate, 0);
 
         // Delegate asks for delegation
         vm.prank(delegate);
@@ -136,7 +125,7 @@ contract TinteroVaultTest is BaseTest, ERC4626Test {
         tintero.askDelegation(amount);
 
         // Delegate is approved
-        accessManager.grantRole(TINTERO_DELEGATE_ROLE, delegate, 0);
+        accessManager.grantRole(TINTERO_DELEGATE_USDC_V01_ROLE, delegate, 0);
 
         // Delegate asks for delegation
         vm.prank(delegate);
@@ -152,7 +141,7 @@ contract TinteroVaultTest is BaseTest, ERC4626Test {
         // Delegate deposits into the vault. It shouldn't happen with the list of
         // accredited investors, but is possible if we want to lift restrictions
         // in the future.
-        accessManager.grantRole(TINTERO_INVESTOR_ROLE, delegate, 0);
+        accessManager.grantRole(TINTERO_INVESTOR_USDC_V01_ROLE, delegate, 0);
         vm.startPrank(delegate);
         usdc.approve(address(tintero), amount);
         tintero.deposit(amount, delegate);
@@ -432,7 +421,7 @@ contract TinteroVaultTest is BaseTest, ERC4626Test {
         );
 
         // Grant manager role
-        accessManager.grantRole(TINTERO_MANAGER_ROLE, manager, 0);
+        accessManager.grantRole(TINTERO_MANAGER_USDC_V01_ROLE, manager, 0);
 
         // Must revert if the loan is not a TinteroLoan
         vm.prank(manager);

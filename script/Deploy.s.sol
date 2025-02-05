@@ -9,6 +9,7 @@ import {ICreateX} from "createx/ICreateX.sol";
 import {Endorser} from "~/Endorser.sol";
 import {TinteroVault} from "~/TinteroVault.sol";
 import {IWitness} from "@WitnessCo/interfaces/IWitness.sol";
+import {ERC20Mock} from "../test/mocks/ERC20Mock.sol";
 
 /// @dev See the Solidity Scripting tutorial: https://book.getfoundry.sh/tutorials/solidity-scripting
 contract Deploy is BaseScript {
@@ -23,9 +24,7 @@ contract Deploy is BaseScript {
     address public constant ENDORSER_ADDRESS =
         0x0000c908D1104caD2867Ec2A8Bb178D78C9bAaaa;
     address public constant TINTERO_VAULT_USDC_ARBITRUM =
-        0x0000dc5ffFA7cA6FE09834F839BB66ABfE85aaAA;
-    address public constant TINTERO_VAULT_USDC_ARBITRUM_SEPOLIA =
-        0x000075E1932d92661538998550700C44b55BaaAA;
+        0x00002293ee85edBc7057fAfE0C03B96d0c46Aaaa;
 
     // From https://docs.witness.co/additional-notes/deployments
     IWitness public constant WITNESS =
@@ -84,20 +83,19 @@ contract Deploy is BaseScript {
         address usdc;
         bytes11 mined;
         address expectedAddress;
+        bool isTestNet;
 
         if (block.chainid == 42161) {
             if (TINTERO_VAULT_USDC_ARBITRUM.code.length > 0)
                 return TINTERO_VAULT_USDC_ARBITRUM; // Already deployed
             usdc = 0xaf88d065e77c8cC2239327C5EDb3A432268e5831;
-            mined = 0x989c4322a667c8017717c0;
+            mined = 0xf30ea911947bb0023b1914;
             expectedAddress = TINTERO_VAULT_USDC_ARBITRUM;
         }
         if (block.chainid == 421614) {
-            if (TINTERO_VAULT_USDC_ARBITRUM_SEPOLIA.code.length > 0)
-                return TINTERO_VAULT_USDC_ARBITRUM_SEPOLIA; // Already deployed
-            usdc = 0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d;
-            mined = 0x2b46596902b2a603c35cc1;
-            expectedAddress = TINTERO_VAULT_USDC_ARBITRUM_SEPOLIA;
+            ERC20Mock usdcMock = new ERC20Mock();
+            usdc = address(usdcMock);
+            isTestNet = true;
         }
         if (usdc == address(0)) {
             console2.log("USDC address not found for chain %d", block.chainid);
@@ -110,7 +108,7 @@ contract Deploy is BaseScript {
         );
         console2.logBytes32(keccak256(code));
         address tinteroVaultUSDC = createX.deployCreate2(_toSalt(mined), code);
-        assert(expectedAddress == tinteroVaultUSDC);
+        assert(isTestNet || expectedAddress == tinteroVaultUSDC);
         return tinteroVaultUSDC;
     }
 

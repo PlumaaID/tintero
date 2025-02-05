@@ -10,7 +10,7 @@ contract EndorserMock is MockWitnessConsumer, Endorser {
     function getProvenanceHash(
         bytes memory data
     ) public pure override(Endorser, MockWitnessConsumer) returns (bytes32) {
-        return Endorser.getProvenanceHash(data);
+        return super.getProvenanceHash(data);
     }
 
     function verifyProof(

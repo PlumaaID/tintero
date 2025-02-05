@@ -30,12 +30,12 @@ contract BaseTest is Test, USDCTest {
         uint64(bytes8(keccak256("PlumaaID.PROVENANCE_AUTHORIZER")));
     uint64 internal constant WITNESS_SETTER_ROLE =
         uint64(bytes8(keccak256("PlumaaID.WITNESS_SETTER")));
-    uint64 internal constant TINTERO_MANAGER_ROLE =
-        uint64(bytes8(keccak256("PlumaaID.TINTERO_MANAGER")));
-    uint64 internal constant TINTERO_DELEGATE_ROLE =
-        uint64(bytes8(keccak256("PlumaaID.TINTERO_DELEGATE")));
-    uint64 internal constant TINTERO_INVESTOR_ROLE =
-        uint64(bytes8(keccak256("PlumaaID.TINTERO_INVESTOR")));
+    uint64 internal constant TINTERO_MANAGER_USDC_V01_ROLE =
+        uint64(bytes8(keccak256("PlumaaID.TINTERO_MANAGER_USDC_V01")));
+    uint64 internal constant TINTERO_DELEGATE_USDC_V01_ROLE =
+        uint64(bytes8(keccak256("PlumaaID.TINTERO_DELEGATE_USDC_V01")));
+    uint64 internal constant TINTERO_INVESTOR_USDC_V01_ROLE =
+        uint64(bytes8(keccak256("PlumaaID.TINTERO_INVESTOR_USDC_V01")));
 
     // From https://docs.witness.co/additional-notes/deployments
     IWitness constant WITNESS =
@@ -81,7 +81,7 @@ contract BaseTest is Test, USDCTest {
         accessManager.setTargetFunctionRole(
             target,
             selectors,
-            TINTERO_DELEGATE_ROLE
+            TINTERO_DELEGATE_USDC_V01_ROLE
         );
     }
 
@@ -96,7 +96,7 @@ contract BaseTest is Test, USDCTest {
         accessManager.setTargetFunctionRole(
             target,
             selectors,
-            TINTERO_MANAGER_ROLE
+            TINTERO_MANAGER_USDC_V01_ROLE
         );
     }
 
@@ -108,7 +108,7 @@ contract BaseTest is Test, USDCTest {
         accessManager.setTargetFunctionRole(
             target,
             selectors,
-            TINTERO_INVESTOR_ROLE
+            TINTERO_INVESTOR_USDC_V01_ROLE
         );
     }
 
@@ -222,7 +222,7 @@ contract BaseTest is Test, USDCTest {
         tintero.pushTranches(ITinteroLoan(loan), paymentIndexes, recipients);
 
         // Grant manager role
-        accessManager.grantRole(TINTERO_MANAGER_ROLE, manager, 0);
+        accessManager.grantRole(TINTERO_MANAGER_USDC_V01_ROLE, manager, 0);
 
         // Manager pushes tranches
         vm.prank(manager);
@@ -232,7 +232,7 @@ contract BaseTest is Test, USDCTest {
     function _addLiquidity(uint256 amount) internal {
         _mintUSDCTo(address(this), amount);
         usdc.approve(address(tintero), amount);
-        accessManager.grantRole(TINTERO_INVESTOR_ROLE, address(this), 0); // Grant investor role
+        accessManager.grantRole(TINTERO_INVESTOR_USDC_V01_ROLE, address(this), 0); // Grant investor role
         tintero.deposit(amount, address(this));
     }
 
