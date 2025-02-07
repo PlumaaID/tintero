@@ -28,11 +28,6 @@ library PaymentLib {
         uint24 premiumRate; // Up to ~1677% annualized
     }
 
-    /// @dev Whether the principal is due.
-    function matured(Payment memory self) internal view returns (bool) {
-        return self.matured(Time.timestamp());
-    }
-
     /// @dev Whether the principal is due at a given time.
     function matured(
         Payment memory self,

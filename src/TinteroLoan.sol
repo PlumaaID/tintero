@@ -328,18 +328,18 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
             revert MismatchedPaymentCollateralIds();
 
         uint256 totalPayments_ = totalPayments();
-        uint256 latestMaturity = 0;
+        uint256 largestMaturityPeriod = 0;
 
         if (totalPayments_ > 0) {
-            latestMaturity = payment(totalPayments_ - 1).maturedAt();
+            largestMaturityPeriod = payment(totalPayments_ - 1).maturedAt();
         }
 
         // Checks and Effects
         uint256 principalRequested = 0;
         for (uint256 i = 0; i < paymentsLength; i++) {
-            latestMaturity = _validatePushPayment(
+            largestMaturityPeriod = _validatePushPayment(
                 totalPayments_ + i,
-                latestMaturity,
+                largestMaturityPeriod,
                 collateralTokenIds_[i],
                 payments_[i]
             );
@@ -413,17 +413,14 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
     /// - Emits a `PaymentCreated` event.
     function _validatePushPayment(
         uint256 i,
-        uint256 latestMaturity,
+        uint256 largestMaturityPeriod,
         uint256 collateralTokenId,
         PaymentLib.Payment calldata payment_
     ) internal returns (uint256) {
         // Checks
         if (payment_.fundedAt != 0) revert PaymentFunded(collateralTokenId);
-        uint256 maturedAt = payment_.maturedAt();
-        if (maturedAt < latestMaturity) revert UnorderedPayments();
-        if (
-            payment_.matured() /* || payment_.defaulted() */ // Default is strictly higher or equal to maturity
-        ) revert PaymentMatured(collateralTokenId);
+        uint256 maturityPeriod = payment_.maturityPeriod;
+        if (maturityPeriod < largestMaturityPeriod) revert UnorderedPayments();
 
         // Effects
         LoanStorage storage $ = getTinteroLoanStorage();
@@ -433,7 +430,7 @@ contract TinteroLoan is Initializable, UUPSUpgradeable, TinteroLoanView {
         $.payments.push(payment_);
         $.collateralTokenIds.push(collateralTokenId);
         emit PaymentCreated(i, collateralTokenId, payment_);
-        return maturedAt;
+        return maturityPeriod;
     }
 
     /// @dev Checks if the tokenId is owned by this contract and transfers it to this contract otherwise.

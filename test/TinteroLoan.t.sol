@@ -322,43 +322,6 @@ contract TinteroLoanTest is BaseTest {
         );
     }
 
-    function testPushPaymentsRevertMaturedPayment(
-        address borrower,
-        address beneficiary,
-        address manager,
-        uint24 nPayments
-    ) public {
-        _sanitizeAccessManagerCaller(manager);
-        _sanitizeActors(borrower, beneficiary);
-        nPayments = uint24(bound(nPayments, 0, ARBITRARY_MAX_PAYMENTS));
-
-        (address loan, , , ) = _requestLoan(
-            borrower,
-            beneficiary,
-            bytes32(0),
-            nPayments,
-            nPayments
-        );
-
-        PaymentLib.Payment[] memory lastPayments = _mockPayments(nPayments, 1);
-        uint256[] memory lastCollateralIds = _mockCollateralIds(
-            nPayments,
-            1,
-            borrower
-        );
-
-        lastPayments[0].maturityPeriod = 0; // Matured
-
-        accessManager.grantRole(TINTERO_MANAGER_USDC_V01_ROLE, manager, 0);
-        vm.prank(manager);
-        vm.expectRevert();
-        tintero.pushPayments(
-            TinteroLoan(loan),
-            lastCollateralIds,
-            lastPayments
-        );
-    }
-
     function testPushPaymentRevertDuplicatedCollateralTokenId(
         address borrower,
         address beneficiary,
