@@ -33,7 +33,7 @@ import {ITinteroVault} from "./ITinteroVault.sol";
 ///     CREATED --> CANCELED: calling withdrawPaymentCollateral()
 ///     ONGOING --> DEFAULTED: after defaultThreshold() payments are missed
 ///     ONGOING --> PAID: calling repayN(...)
-///     DEFAULTED --> REPOSSESSED: calling recall(...)
+///     DEFAULTED --> REPOSSESSED: calling repossess(...)
 ///     DEFAULTED --> ONGOING: calling repayN(...)
 ///     DEFAULTED --> PAID: calling repayN(...)
 /// ```

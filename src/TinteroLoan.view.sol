@@ -119,7 +119,7 @@ abstract contract TinteroLoanView is TinteroLoanStorage {
 
         if (defaultAt > totalPayments()) return false; // Cannot default if there are no more payments
 
-        // If any of the following payments until the threshold is not matured, the loan is not defaulted
+        // If any of the following payments until the threshold is not defaulted, the loan is not defaulted
         for (uint256 i = current; i < defaultAt; i++) {
             if (!payment(i).defaulted()) return false;
         }

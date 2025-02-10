@@ -363,7 +363,7 @@ contract TinteroVault is ITinteroVault, TinteroLoanFactory, ERC4626 {
         PaymentLib.Payment[] calldata payments
     ) internal {
         // State is consistent at this point.
-        // Although reentrancy is not possible, it's not an issue.
+        // Although reentrancy is possible from the loan, it's not an issue.
         uint256 principalRequested = loan.pushPayments(
             collateralTokenIds,
             payments
