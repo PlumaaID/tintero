@@ -40,3 +40,7 @@ scope:; tree ./src/ | sed 's/└/#/g; s/──/--/g; s/├/#/g; s/│ /|/g; s/�
 deploy_arbitrum:; ETH_FROM=0x00560ED8242bF346c162c668487BaCD86cc0B8aa forge script script/Deploy.s.sol --rpc-url arbitrum --account plumaa_deployer --broadcast --verify
 
 deploy_arbitrum_sepolia:; ETH_FROM=0x00560ED8242bF346c162c668487BaCD86cc0B8aa forge script script/Deploy.s.sol --rpc-url arbitrum_sepolia --account plumaa_deployer --broadcast --verify
+
+deploy_base:; ETH_FROM=0x00560ED8242bF346c162c668487BaCD86cc0B8aa forge script script/Deploy.s.sol --rpc-url base --account plumaa_deployer --broadcast --verify
+
+deploy_base_sepolia:; ETH_FROM=0x00560ED8242bF346c162c668487BaCD86cc0B8aa forge script script/Deploy.s.sol --rpc-url base_sepolia --account plumaa_deployer --broadcast --verify

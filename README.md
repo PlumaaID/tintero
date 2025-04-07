@@ -26,6 +26,8 @@ make
 | ---------------- | ------- | ------------------------------------------ |
 | Arbitrum         | 42161   | 0x0000c908D1104caD2867Ec2A8Bb178D78C9bAaaa |
 | Arbitrum Sepolia | 421614  | 0x0000c908D1104caD2867Ec2A8Bb178D78C9bAaaa |
+| Base             | 8453    | 0x0000c908D1104caD2867Ec2A8Bb178D78C9bAaaa |
+| Base Sepolia     | 84532   | 0x0000c908D1104caD2867Ec2A8Bb178D78C9bAaaa |
 
 #### Access Manager
 
@@ -33,15 +35,19 @@ make
 | ---------------- | ------- | ------------------------------------------ |
 | Arbitrum         | 42161   | 0x0000593Daa1e9E24FEe19AF6B258A268c97aAAAa |
 | Arbitrum Sepolia | 421614  | 0x0000593Daa1e9E24FEe19AF6B258A268c97aAAAa |
+| Base             | 8453    | 0x0000593Daa1e9E24FEe19AF6B258A268c97aAAAa |
+| Base Sepolia     | 84532   | 0x0000593Daa1e9E24FEe19AF6B258A268c97aAAAa |
 
 #### Tintero Vaults
 
-##### USDC
+##### USDC_V01
 
-| Network          | ChainID | Address |
-| ---------------- | ------- | ------- |
-| Arbitrum         | 42161   | TBD     |
-| Arbitrum Sepolia | 421614  | TBD     |
+| Network          | ChainID | Address                                    |
+| ---------------- | ------- | ------------------------------------------ |
+| Arbitrum         | 42161   | 0x0000b4F4680D95917168f47d771fe336dDE9aAAA |
+| Arbitrum Sepolia | 421614  | 0x0000a42D78b4173229E926834c4eB65e2b0DAaAa |
+| Base             | 8453    | 0x0000BeA423d9f6c34750e5d7871ee3F228A2aAAa |
+| Base Sepolia     | 84532   | 0x000043FAfeb88800937ec535834f89983d83AaAA |
 
 ## Roles
 
@@ -54,17 +60,17 @@ make
 
 ### Role mapping
 
-| Role                      | Function signature                                                               | Selector | Target contract                            |
-| ------------------------- | -------------------------------------------------------------------------------- | -------- | ------------------------------------------ |
-| UPGRADER                  | `upgradeToAndCall(address,bytes)`                                                | 4f1ef286 | 0x0000c908D1104caD2867Ec2A8Bb178D78C9bAaaa |
-| WITNESS_SETTER            | `setWitness(address)`                                                            | 0bc14f8b | 0x0000c908D1104caD2867Ec2A8Bb178D78C9bAaaa |
-| TINTERO_MANAGER_USDC_V01  | `pushTranches(address,uint96[],address[])`                                       | 1589cd5e | TBD                                        |
-| TINTERO_MANAGER_USDC_V01  | `fundN(address,uint256)`                                                         | ae527b8a | TBD                                        |
-| TINTERO_MANAGER_USDC_V01  | `repossess(address,uint256,uint256,address)`                                     | d3b500cf | TBD                                        |
-| TINTERO_MANAGER_USDC_V01  | `upgradeLoan(address,uint256,uint256,address)`                                   | c3aacfe3 | TBD                                        |
-| TINTERO_DELEGATE_USDC_V01 | `askDelegation(uint256)`                                                         | 30adbaff | TBD                                        |
-| TINTERO_INVESTOR          | `deposit(uint256,address)`                                                       | 6e553f65 | TBD                                        |
-| TINTERO_INVESTOR          | `mint(uint256,address)`                                                          | 94bf804d | TBD                                        |
+| Role                      | Function signature                             | Selector | Target contract                            |
+| ------------------------- | ---------------------------------------------- | -------- | ------------------------------------------ |
+| UPGRADER                  | `upgradeToAndCall(address,bytes)`              | 4f1ef286 | 0x0000c908D1104caD2867Ec2A8Bb178D78C9bAaaa |
+| WITNESS_SETTER            | `setWitness(address)`                          | 0bc14f8b | 0x0000c908D1104caD2867Ec2A8Bb178D78C9bAaaa |
+| TINTERO_MANAGER_USDC_V01  | `pushTranches(address,uint96[],address[])`     | 1589cd5e | [USDC_V01](#usdc_v01)                      |
+| TINTERO_MANAGER_USDC_V01  | `fundN(address,uint256)`                       | ae527b8a | [USDC_V01](#usdc_v01)                      |
+| TINTERO_MANAGER_USDC_V01  | `repossess(address,uint256,uint256,address)`   | d3b500cf | [USDC_V01](#usdc_v01)                      |
+| TINTERO_MANAGER_USDC_V01  | `upgradeLoan(address,uint256,uint256,address)` | c3aacfe3 | [USDC_V01](#usdc_v01)                      |
+| TINTERO_DELEGATE_USDC_V01 | `askDelegation(uint256)`                       | 30adbaff | [USDC_V01](#usdc_v01)                      |
+| TINTERO_INVESTOR          | `deposit(uint256,address)`                     | 6e553f65 | [USDC_V01](#usdc_v01)                      |
+| TINTERO_INVESTOR          | `mint(uint256,address)`                        | 94bf804d | [USDC_V01](#usdc_v01)                      |
 
 ### Role members
 
